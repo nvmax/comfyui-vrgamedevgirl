@@ -44442,6 +44442,14 @@ Chrome vault corridor = Sealed industrial passage...</pre>
       await autoSaveSessionQuiet("MiniMax timeline segments created from storyboard");
       return { message: `Created ${nextSegments.length} MiniMax timeline segment${nextSegments.length === 1 ? "" : "s"} from the reviewed storyboard.` };
     };
+    const storyboardRunnerSettings = textGemmaRunnerPayload();
+    const storyboardUsesQwen = state.textGemmaRunner === "qwen_local";
+    const storyboardSelectedModel = storyboardUsesQwen
+      ? String(storyboardRunnerSettings.qwen_model_file || "").trim()
+      : String(storyboardRunnerSettings.gemma_model_file || "").trim();
+    const storyboardSelectedMmproj = storyboardUsesQwen
+      ? String(storyboardRunnerSettings.qwen_mmproj_file || "").trim()
+      : String(i2vMmprojSelect.value || mmprojSelect.value || "").trim();
     window.VRGDGStoryboardBuilder.open({
       projectFolder: projectInput.value || state.projectFolder || "",
       projectVideoEngine: normalizeProjectVideoEngine(state.projectVideoEngine),
@@ -44485,10 +44493,10 @@ Chrome vault corridor = Sealed industrial passage...</pre>
       referenceBuilder: storyboardReferenceBuilderWithIdLoraRefs(state.fluxReferenceBuilder),
       storyLayer: normalizeBuilderStoryLayer(state.builderStoryLayer),
       gemmaSettings: {
-        ...textGemmaRunnerPayload(),
-        model_file: i2vTextGemmaModelSelect.value || t2iTextGemmaModelSelect.value || "",
-        vision_model_file: i2vGemmaModelSelect.value || gemmaModelSelect.value || "",
-        mmproj_file: i2vMmprojSelect.value || mmprojSelect.value || "",
+        ...storyboardRunnerSettings,
+        model_file: storyboardSelectedModel,
+        vision_model_file: storyboardSelectedModel,
+        mmproj_file: storyboardSelectedMmproj,
         n_ctx: normalizeGemmaContextLimit(state.gemmaContextLimit),
         n_gpu_layers: normalizeGemmaGpuLayers(state.gemmaGpuLayers),
         n_threads: 8,

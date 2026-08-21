@@ -1393,7 +1393,7 @@ function showGemmaBatchFailures(failures, options = {}) {
   const box = document.createElement("div");
   box.style.cssText = "width:min(980px,calc(100vw - 36px));max-height:calc(100vh - 36px);overflow:auto;border:1px solid #991b1b;border-radius:10px;background:#111827;color:#f8fafc;box-shadow:0 22px 80px rgba(0,0,0,.65);padding:16px;box-sizing:border-box;";
   const title = document.createElement("div");
-  title.innerHTML = `<div style="font-size:17px;font-weight:900;color:#fecaca;">Gemma skipped ${items.length} scene${items.length === 1 ? "" : "s"}</div><div style="font-size:12px;color:#cbd5e1;margin-top:5px;">Successful scenes were kept. Only these scenes will be retried.</div>`;
+  title.innerHTML = `<div style="font-size:17px;font-weight:900;color:#fecaca;">LLM skipped ${items.length} scene${items.length === 1 ? "" : "s"}</div><div style="font-size:12px;color:#cbd5e1;margin-top:5px;">Successful scenes were kept. Only these scenes will be retried.</div>`;
   const list = document.createElement("div");
   list.style.cssText = "display:flex;flex-direction:column;gap:12px;margin-top:14px;";
   items.forEach((item) => {
@@ -4383,7 +4383,7 @@ function openBuilder(node) {
   const editImagePromptButtons = [];
   function makeEditImagePromptButton() {
     const button = makeButton("Edit Prompt");
-    button.title = "Ask Gemma to make a focused edit to the current image prompt.";
+  button.title = "Ask the selected LLM runner to make a focused edit to the current image prompt.";
     button.style.display = "none";
     editImagePromptButtons.push(button);
     return button;
@@ -4411,7 +4411,7 @@ function openBuilder(node) {
   const fluxNotes = document.createElement("textarea");
   fluxNotes.placeholder = "Optional pose, camera, wardrobe, lighting, or mood notes...";
   fluxNotes.style.cssText = "width:100%;box-sizing:border-box;min-height:72px;resize:vertical;border:1px solid #3f3f46;border-radius:6px;background:#18181b;color:#fafafa;padding:9px;font-size:12px;line-height:1.45;";
-  const fluxUseTextOnlyGemmaPrompt = makeCheckbox("Use text-only Gemma for Flux prompts", false);
+  const fluxUseTextOnlyGemmaPrompt = makeCheckbox("Use text-only LLM for Flux prompts", false);
   const fluxUseDirectorNotes = makeCheckbox("Use Director Notes in Flux prompt", false);
   const fluxGemmaModelSelect = makeSelect([""], "");
   const fluxMmprojSelect = makeSelect([""], "");
@@ -4460,7 +4460,7 @@ function openBuilder(node) {
   const nbModelSelect = makeSelect(NB_IMAGE_MODELS, DEFAULT_NB_IMAGE_MODEL);
   const nbGemmaModelSelect = makeSelect([""], "");
   const nbMmprojSelect = makeSelect([""], "");
-  const nbUseTextOnlyGemmaPrompt = makeCheckbox("Use text-only Gemma for Nano B prompts", false);
+  const nbUseTextOnlyGemmaPrompt = makeCheckbox("Use text-only LLM for Nano B prompts", false);
   const nbUseDirectorNotes = makeCheckbox("Use Director Notes in Nano B prompt", false);
   const nbNotes = document.createElement("textarea");
   nbNotes.placeholder = "Optional camera, framing, pose, scene, or edit notes for NanoBanana...";
@@ -5786,7 +5786,7 @@ function openBuilder(node) {
           makeField("Flux VAE", fluxVaePicker.wrapper),
         ]),
         makeSettingsSection("Vision LLM Models", [
-          makeField("Gemma vision model", fluxGemmaModelSelect),
+        makeField("Vision LLM model", fluxGemmaModelSelect),
           makeField("Vision mmproj", fluxMmprojSelect),
         ]),
         fluxUseLora.wrapper,
@@ -5835,7 +5835,7 @@ function openBuilder(node) {
           makeField("Model", nbModelSelect),
         ]),
         makeSettingsSection("Vision LLM Models", [
-          makeField("Gemma vision model", nbGemmaModelSelect),
+        makeField("Vision LLM model", nbGemmaModelSelect),
           makeField("Vision mmproj", nbMmprojSelect),
         ]),
         makeNBCreateButton(),
@@ -5939,7 +5939,7 @@ function openBuilder(node) {
         makeField("CLIP", zEnhanceClipPicker.wrapper),
         makeField("VAE", zEnhanceVaePicker.wrapper),
         makeSettingsSection("Vision LLM Models", [
-          makeField("Gemma vision model", zEnhanceGemmaModelSelect),
+        makeField("Vision LLM model", zEnhanceGemmaModelSelect),
           makeField("Vision mmproj", zEnhanceMmprojSelect),
         ]),
         zEnhanceUseLora.wrapper,
@@ -5961,7 +5961,7 @@ function openBuilder(node) {
       label: "LLM Prompting",
       value: "prompting",
       content: makeSettingsPanel([
-        makeField("Gemma notes", zEnhanceGemmaNotes),
+        makeField("LLM notes", zEnhanceGemmaNotes),
         zEnhanceGemmaButton,
         makeField("Enhance prompt", zEnhancePromptPreview),
       ]),
@@ -10860,8 +10860,10 @@ function openBuilder(node) {
 
   function runnerAwareLlmText(value) {
     return String(value || "")
-      .replace(/\b(?:Vision Gemma|Gemma Vision)\b/gi, gemmaRunnerLabel({ vision: true }))
+      .replace(/\b(?:Vision Gemma|Gemma Vision|Gemma vision)\b/gi, gemmaRunnerLabel({ vision: true }))
+      .replace(/\bGemma Local\b/gi, promptRunnerActionName())
       .replace(/\bGemma4?\b/g, promptRunnerActionName())
+      .replace(/\bGemma\b/g, promptRunnerActionName())
       .replace(/\bAPI LLM\b/g, "LLM API")
       .replace(/\bOwn server\b/gi, "Custom Server");
   }
@@ -10930,12 +10932,12 @@ function openBuilder(node) {
   async function describeReferenceImageWithGemma(target, referenceType = "subject", options = {}) {
     const image = target?.image || {};
     if (!hasReferenceImage(image)) {
-      throw new Error(referenceType === "location" ? "This location has no image for Gemma to describe." : "This reference has no image for Gemma to describe.");
+      throw new Error(referenceType === "location" ? `This location has no image for ${gemmaRunnerLabel({ vision: true })} to describe.` : `This reference has no image for ${gemmaRunnerLabel({ vision: true })} to describe.`);
     }
     const modelFile = referenceDescriptionVisionModel();
     const mmprojFile = referenceDescriptionMmproj();
     if (!["lm_studio", "llm_api", "own_server"].includes(state.textGemmaRunner) && (!modelFile || !mmprojFile)) {
-      throw new Error("Choose a Gemma vision model and Vision mmproj first.");
+      throw new Error(`Choose a ${gemmaRunnerLabel({ vision: true })} model and Vision mmproj first.`);
     }
     const data = await postJson("/vrgdg/music_builder/describe_reference_image", {
       ...textGemmaRunnerPayload(),

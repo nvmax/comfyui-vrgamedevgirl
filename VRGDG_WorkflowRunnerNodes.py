@@ -2,6 +2,7 @@ import copy
 import base64
 import hashlib
 import importlib
+import inspect
 import json
 import math
 import os
@@ -665,7 +666,7 @@ def _minimax_h3_video_references(payload):
     return references
 
 
-def _patch_minimax_h3_image_to_video_node(prompt, image_paths):
+def _patch_minimax_h3_image_to_video_node(prompt, image_paths, include_references=False, has_last_frame=False):
     """Replace the H3 reference node with the native first/last-frame node.
 
     The standard MiniMax builder graph intentionally keeps the same downstream
@@ -680,7 +681,7 @@ def _patch_minimax_h3_image_to_video_node(prompt, image_paths):
     paths = list(image_paths or [])
     if not paths:
         raise ValueError("MiniMax H3 image-to-video requires a first-frame image.")
-    if len(paths) > 2:
+    if not include_references and len(paths) > 2:
         raise ValueError("MiniMax H3 image-to-video accepts at most a first and last frame.")
 
     inputs = {
@@ -692,8 +693,18 @@ def _patch_minimax_h3_image_to_video_node(prompt, image_paths):
         "vae": ["119", 0],
         "first_frame": ["180", 0],
     }
-    if len(paths) > 1:
+    if (include_references and has_last_frame) or (not include_references and len(paths) > 1):
         inputs["last_frame"] = ["180", 1]
+
+    if include_references:
+        ref_start = 2 if has_last_frame else 1
+        for ref_index, loader_slot in enumerate(range(ref_start, len(paths))):
+            inputs[f"ref_images.ref_image_{ref_index}"] = ["180", loader_slot]
+        inputs["ref_image_size"] = "max"
+        node["class_type"] = "VRGDG_MiniMaxH3ImageReferenceToVideo"
+        node["_meta"] = {"title": "MiniMax H3 Image + Reference to Video"}
+        node["inputs"] = inputs
+        return
 
     node["class_type"] = "MiniMaxH3ImageToVideo"
     node["_meta"] = {"title": "MiniMax H3 Image to Video"}
@@ -1854,8 +1865,10 @@ def _patch_t2v_api_prompt(prompt, payload):
     _set_api_input(prompt, "271:254", "vae_name", str(payload.get("audio_vae_name", "") or ""))
 
     _set_api_input(prompt, "736:424", "value", fps)
-    _set_api_input(prompt, "736:425", "value", width)
-    _set_api_input(prompt, "736:426", "value", height)
+    generation_width = int(math.ceil(width / 64.0) * 64) if is_ltx25 else width
+    generation_height = int(math.ceil(height / 64.0) * 64) if is_ltx25 else height
+    _set_api_input(prompt, "736:425", "value", generation_width)
+    _set_api_input(prompt, "736:426", "value", generation_height)
     _set_api_input(prompt, "736:449", "value", seed)
     _set_api_input(prompt, "736:551", "value", 0)
 
@@ -1881,6 +1894,14 @@ def _patch_t2v_api_prompt(prompt, payload):
     _set_api_input(prompt, "218:287", "overwrite_mode", "overwrite")
     _set_api_input(prompt, "218:287", "tail_loss_frames", tail_loss_frames)
     _set_api_input(prompt, "218:287", "pre_frames", pre_frames)
+    if is_ltx25:
+        final_resize_id = "vrgdg_ltx25_t2v_final_center_crop"
+        _replace_api_input_refs(prompt, ("936", 0), (final_resize_id, 0))
+        prompt[final_resize_id] = {
+            "class_type": "ImageScale",
+            "inputs": {"image": ["936", 0], "upscale_method": "lanczos", "width": width, "height": height, "crop": "center"},
+            "_meta": {"title": "Center crop LTX 2.5 T2V to requested output resolution"},
+        }
     _patch_ltx_two_pass_sampler_overrides(prompt, payload)
     _set_api_input(prompt, "437", "value", output_folder)
     return prompt, output_folder
@@ -2391,6 +2412,62 @@ def _input_names_for_node(class_type, mappings):
         if isinstance(values, dict):
             names.extend(values.keys())
     return names
+
+
+_MMH3_SPATIAL_SPLIT_NEW_DEFAULTS = {
+    "masked_area_noise": 0.0,
+    "brightness_match": False,
+    "dynamic_fade": "off",
+    "dynamic_fade_min": 32,
+}
+_MMH3_DYNAMIC_FADE_MODES = {"off", "narrowing", "widening"}
+
+
+def _node_input_names(class_type, mappings):
+    try:
+        return list(_input_names_for_node(class_type, mappings))
+    except Exception:
+        pass
+    node_class = mappings.get(class_type) if isinstance(mappings, dict) else None
+    if node_class is None:
+        return []
+    define_schema = getattr(node_class, "define_schema", None)
+    if callable(define_schema):
+        try:
+            schema = define_schema()
+            names = []
+            for inp in getattr(schema, "inputs", None) or []:
+                name = getattr(inp, "id", None) or getattr(inp, "name", None)
+                if name:
+                    names.append(str(name))
+            if names:
+                return names
+        except Exception:
+            pass
+    execute = getattr(node_class, "execute", None)
+    if callable(execute):
+        try:
+            names = []
+            for name, param in inspect.signature(execute).parameters.items():
+                if name in {"cls", "self"}:
+                    continue
+                if param.kind in (inspect.Parameter.VAR_POSITIONAL, inspect.Parameter.VAR_KEYWORD):
+                    continue
+                names.append(name)
+            return names
+        except (TypeError, ValueError):
+            pass
+    return []
+
+
+def _compat_node_inputs(class_type, mappings, required_inputs, extra_defaults=None):
+    """Keep required inputs, and attach extras only when the installed node declares them."""
+    inputs = dict(required_inputs)
+    names = set(_node_input_names(class_type, mappings))
+    for key, value in (extra_defaults or {}).items():
+        if key in names:
+            inputs[key] = value
+    return inputs
 
 
 def _api_widget_values(class_type, widget_values):
@@ -3043,7 +3120,7 @@ def _build_minimax_h3_api_prompt(payload):
     image_paths = _minimax_h3_image_paths(payload)
     video_references = _minimax_h3_video_references(payload)
     video_mode = str(payload.get("video_mode") or payload.get("mode") or "text_to_video").strip().lower().replace("-", "_").replace(" ", "_")
-    if video_mode == "image_to_video":
+    if video_mode in {"image_to_video", "image_reference_to_video"}:
         if not image_paths:
             raise ValueError("MiniMax H3 image-to-video requires a scene image as the first frame.")
         last_frame_path = str(payload.get("last_frame_path") or "").strip().strip('"')
@@ -3051,9 +3128,23 @@ def _build_minimax_h3_api_prompt(payload):
             last_frame_path = os.path.abspath(last_frame_path)
             if not os.path.isfile(last_frame_path):
                 raise FileNotFoundError(f"MiniMax H3 last-frame image was not found: {last_frame_path}")
-            if os.path.abspath(image_paths[0]) != last_frame_path:
+        if video_mode == "image_reference_to_video":
+            start_frame_path = image_paths[0]
+            image_paths = image_paths[1:]
+            if last_frame_path and os.path.abspath(start_frame_path) == last_frame_path:
+                last_frame_path = ""
+            combined_images = [start_frame_path] + ([last_frame_path] if last_frame_path else []) + image_paths
+            image_paths = combined_images
+            _patch_minimax_h3_image_to_video_node(
+                prompt,
+                image_paths,
+                include_references=True,
+                has_last_frame=bool(last_frame_path),
+            )
+        else:
+            if last_frame_path and os.path.abspath(image_paths[0]) != last_frame_path:
                 image_paths = [image_paths[0], last_frame_path]
-        _patch_minimax_h3_image_to_video_node(prompt, image_paths)
+            _patch_minimax_h3_image_to_video_node(prompt, image_paths)
         video_references = []
     aspect_ratio = str(payload.get("aspect_ratio") or "16:9 (Widescreen)").strip()
     if aspect_ratio not in _MINIMAX_H3_ASPECT_RATIOS:
@@ -3206,6 +3297,28 @@ def _build_minimax_h3_2pass_api_prompt(payload):
 
     image_paths = _minimax_h3_image_paths(payload)
     video_references = _minimax_h3_video_references(payload)
+    video_mode = str(payload.get("video_mode") or payload.get("mode") or "reference_to_video").strip().lower().replace("-", "_").replace(" ", "_")
+    if video_mode == "image_reference_to_video":
+        if not image_paths:
+            raise ValueError("MiniMax H3 image-to-video requires a scene image as the first frame.")
+        start_frame_path = image_paths[0]
+        image_paths = image_paths[1:]
+        last_frame_path = str(payload.get("last_frame_path") or "").strip().strip('"')
+        if last_frame_path:
+            last_frame_path = os.path.abspath(last_frame_path)
+            if not os.path.isfile(last_frame_path):
+                raise FileNotFoundError(f"MiniMax H3 last-frame image was not found: {last_frame_path}")
+            if os.path.abspath(start_frame_path) == last_frame_path:
+                last_frame_path = ""
+        combined_images = [start_frame_path] + ([last_frame_path] if last_frame_path else []) + image_paths
+        image_paths = combined_images
+        _patch_minimax_h3_image_to_video_node(
+            prompt,
+            image_paths,
+            include_references=True,
+            has_last_frame=bool(last_frame_path),
+        )
+        video_references = []
     diffusion_model_name = str(payload.get("diffusion_model_name") or "minimax_h3_ref2va_pruned_int8_convrot.safetensors").strip()
     clip_name = str(payload.get("clip_name") or "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors").strip()
     video_vae_name = str(payload.get("video_vae_name") or "minimax_h3_video_vae_fp16.safetensors").strip()
@@ -3434,6 +3547,20 @@ def _build_minimax_h3_advanced_2pass_api_prompt(payload):
         overlap_mode = "earlier"
     if overlap_blend not in {"linear", "smoothstep", "overwrite", "midpoint"}:
         overlap_blend = "linear"
+    masked_area_noise = _float_payload(
+        payload, "advanced_masked_area_noise", _MMH3_SPATIAL_SPLIT_NEW_DEFAULTS["masked_area_noise"], 0.0, 1.0
+    )
+    brightness_match = _bool_payload(
+        payload, "advanced_brightness_match", _MMH3_SPATIAL_SPLIT_NEW_DEFAULTS["brightness_match"]
+    )
+    dynamic_fade = str(
+        payload.get("advanced_dynamic_fade") or _MMH3_SPATIAL_SPLIT_NEW_DEFAULTS["dynamic_fade"]
+    ).strip().lower()
+    if dynamic_fade not in _MMH3_DYNAMIC_FADE_MODES:
+        dynamic_fade = _MMH3_SPATIAL_SPLIT_NEW_DEFAULTS["dynamic_fade"]
+    dynamic_fade_min = _int_payload(
+        payload, "advanced_dynamic_fade_min", _MMH3_SPATIAL_SPLIT_NEW_DEFAULTS["dynamic_fade_min"], 0, 16384
+    )
     if chunk_length % 17 or temporal_overlap % 17:
         raise ValueError("MMH3 chunk length and temporal overlap must be multiples of 17 frames.")
     if temporal_overlap >= chunk_length:
@@ -3485,6 +3612,7 @@ def _build_minimax_h3_advanced_2pass_api_prompt(payload):
     pass2_conditioning = copy.deepcopy(prompt["136"])
     pass2_conditioning["inputs"]["width"] = ["9301", 0]
     pass2_conditioning["inputs"]["height"] = ["9301", 1]
+    pass2_conditioning["inputs"]["prompt"] = str(_first_payload_value(payload, "pass2_prompt", "minimax_h3_pass2_prompt", default="") or "")
     pass2_conditioning["_meta"] = {"title": "2 Pass Advanced - Final Resolution Conditioning"}
     prompt["9302"] = pass2_conditioning
 
@@ -3508,9 +3636,10 @@ def _build_minimax_h3_advanced_2pass_api_prompt(payload):
         },
         "_meta": {"title": "2 Pass Advanced - Temporal Chunks"},
     }
-    prompt["9305"] = {
-        "class_type": "MMH3SpatialSplitParams",
-        "inputs": {
+    spatial_inputs = _compat_node_inputs(
+        "MMH3SpatialSplitParams",
+        mappings,
+        {
             "upscale_width": ["9301", 0],
             "upscale_height": ["9301", 1],
             "tile_size_mode": tile_size_mode,
@@ -3526,6 +3655,20 @@ def _build_minimax_h3_advanced_2pass_api_prompt(payload):
             "overlap_mode": overlap_mode,
             "overlap_blend": overlap_blend,
         },
+        extra_defaults={
+            "masked_area_noise": masked_area_noise,
+            "brightness_match": brightness_match,
+            "dynamic_fade": dynamic_fade,
+            "dynamic_fade_min": dynamic_fade_min,
+        },
+    )
+    if "dynamic_fade_min" in spatial_inputs and spatial_inputs["dynamic_fade_min"] % 32:
+        raise ValueError(
+            f"MMH3 dynamic fade min must be a multiple of 32 pixels; got {spatial_inputs['dynamic_fade_min']}."
+        )
+    prompt["9305"] = {
+        "class_type": "MMH3SpatialSplitParams",
+        "inputs": spatial_inputs,
         "_meta": {"title": "2 Pass Advanced - Spatial Tiles"},
     }
     pass2_model_ref = copy.deepcopy(prompt["192"]["inputs"]["model"])

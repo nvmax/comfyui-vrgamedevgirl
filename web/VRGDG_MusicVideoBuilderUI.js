@@ -262,6 +262,7 @@ const DEFAULT_MINIMAX_H3_SETTINGS = {
   two_pass_defaults_version: 1,
   two_pass_final_width: 1920,
   two_pass_final_height: 1080,
+  two_pass_megapixels: 2,
   two_pass_latent_upscale_scale: 2,
   two_pass_latent_upscaler_name: "minimax_h3_latent_upscaler_3d_bf16.safetensors",
   two_pass_use_te_speed: true,
@@ -532,6 +533,11 @@ function cloneMiniMaxH3Settings(value = {}) {
       : DEFAULT_MINIMAX_H3_SETTINGS.ref_image_size,
     two_pass_final_width: Math.max(64, Math.min(16384, Math.trunc(Number(source.two_pass_final_width ?? DEFAULT_MINIMAX_H3_SETTINGS.two_pass_final_width)))),
     two_pass_final_height: Math.max(64, Math.min(16384, Math.trunc(Number(source.two_pass_final_height ?? DEFAULT_MINIMAX_H3_SETTINGS.two_pass_final_height)))),
+    two_pass_megapixels: Math.max(0.1, Number(source.two_pass_megapixels ?? (
+      source.two_pass_final_width && source.two_pass_final_height
+        ? (Math.round(((Number(source.two_pass_final_width) * Number(source.two_pass_final_height)) / 1048576) * 10) / 10)
+        : DEFAULT_MINIMAX_H3_SETTINGS.two_pass_megapixels
+    ))),
     two_pass_defaults_version: DEFAULT_MINIMAX_H3_SETTINGS.two_pass_defaults_version,
     two_pass_latent_upscale_scale: Math.max(1, Math.min(8, Number(hasCurrentTwoPassDefaults
       ? (source.two_pass_latent_upscale_scale ?? DEFAULT_MINIMAX_H3_SETTINGS.two_pass_latent_upscale_scale)
@@ -6217,6 +6223,21 @@ function openBuilder(node) {
     const height = Math.round(ratioHeight * scale / 32) * 32;
     return Number(((width * height) / 1048576).toFixed(4));
   };
+  const resolveMiniMaxDimensions = (aspectRatio, megapixels) => {
+    const match = String(aspectRatio || "16:9").match(/(\d+)\s*:\s*(\d+)/);
+    const ratioWidth = Number(match?.[1] || 16);
+    const ratioHeight = Number(match?.[2] || 9);
+    const targetMp = Math.max(0.1, Number(megapixels || 2.0));
+    const scale = Math.sqrt((targetMp * 1024 * 1024) / (ratioWidth * ratioHeight));
+    let width = Math.round((ratioWidth * scale) / 32) * 32;
+    let height = Math.round((ratioHeight * scale) / 32) * 32;
+    if (ratioWidth === 16 && ratioHeight === 9 && width === 1920 && height === 1088) {
+      height = 1080;
+    } else if (ratioWidth === 9 && ratioHeight === 16 && width === 1088 && height === 1920) {
+      width = 1080;
+    }
+    return { width: Math.max(64, width), height: Math.max(64, height) };
+  };
   const advancedTwoPassControls = [1, 2].map((pass) => {
     const prefix = `advanced_two_pass_pass${pass}_`;
     const megapixels = makeInput(String(DEFAULT_MINIMAX_H3_SETTINGS[`${prefix}megapixels`]), "number");
@@ -6306,6 +6327,28 @@ function openBuilder(node) {
   miniMaxTwoPassFinalHeight.min = "64";
   miniMaxTwoPassFinalHeight.max = "16384";
   miniMaxTwoPassFinalHeight.step = "1";
+  const syncTwoPassDimensionsFromMegapixels = () => {
+    if (!state.miniMaxH3TwoPassEnabled) return;
+    const { width, height } = resolveMiniMaxDimensions(miniMaxAspectRatio.value, miniMaxMegapixels.value);
+    miniMaxTwoPassFinalWidth.value = String(width);
+    miniMaxTwoPassFinalHeight.value = String(height);
+  };
+  const syncMegapixelsFromTwoPassDimensions = () => {
+    if (!state.miniMaxH3TwoPassEnabled) return;
+    const w = Number(miniMaxTwoPassFinalWidth.value);
+    const h = Number(miniMaxTwoPassFinalHeight.value);
+    if (w > 0 && h > 0) {
+      const mp = Math.round(((w * h) / 1048576) * 10) / 10;
+      miniMaxMegapixels.value = String(Math.max(0.1, mp));
+    }
+  };
+  miniMaxMegapixels.addEventListener("input", syncTwoPassDimensionsFromMegapixels);
+  miniMaxMegapixels.addEventListener("change", syncTwoPassDimensionsFromMegapixels);
+  miniMaxAspectRatio.addEventListener("change", syncTwoPassDimensionsFromMegapixels);
+  miniMaxTwoPassFinalWidth.addEventListener("input", syncMegapixelsFromTwoPassDimensions);
+  miniMaxTwoPassFinalWidth.addEventListener("change", syncMegapixelsFromTwoPassDimensions);
+  miniMaxTwoPassFinalHeight.addEventListener("input", syncMegapixelsFromTwoPassDimensions);
+  miniMaxTwoPassFinalHeight.addEventListener("change", syncMegapixelsFromTwoPassDimensions);
   const miniMaxTwoPassLatentScale = makeInput(String(DEFAULT_MINIMAX_H3_SETTINGS.two_pass_latent_upscale_scale), "number");
   miniMaxTwoPassLatentScale.min = "1";
   miniMaxTwoPassLatentScale.max = "8";
@@ -7739,7 +7782,12 @@ function openBuilder(node) {
       video_vae_name: miniMaxVideoVaePicker.input.value,
       audio_vae_name: miniMaxAudioVaePicker.input.value,
       aspect_ratio: miniMaxAspectRatio.value,
-      megapixels: miniMaxMegapixels.value,
+      megapixels: state.miniMaxH3TwoPassEnabled
+        ? (currentSettings.megapixels ?? DEFAULT_MINIMAX_H3_SETTINGS.megapixels)
+        : miniMaxMegapixels.value,
+      two_pass_megapixels: state.miniMaxH3TwoPassEnabled
+        ? miniMaxMegapixels.value
+        : (currentSettings.two_pass_megapixels ?? DEFAULT_MINIMAX_H3_SETTINGS.two_pass_megapixels),
       seed: miniMaxSeed.value,
       warmup_frames: miniMaxWarmupFrames.value,
       cooldown_frames: miniMaxCooldownFrames.value,
@@ -8466,7 +8514,7 @@ function openBuilder(node) {
     miniMaxAudioMode.value = settings.audio_mode;
     miniMaxContinuityMode.value = settings.continuity_mode;
     miniMaxAspectRatio.value = settings.aspect_ratio;
-    miniMaxMegapixels.value = String(settings.megapixels);
+    miniMaxMegapixels.value = String(state.miniMaxH3TwoPassEnabled ? (settings.two_pass_megapixels ?? 2) : settings.megapixels);
     miniMaxSeed.value = String(settings.seed);
     miniMaxWarmupFrames.value = String(settings.warmup_frames);
     miniMaxCooldownFrames.value = String(settings.cooldown_frames);
@@ -8532,7 +8580,7 @@ function openBuilder(node) {
       control.seed.value = String(settings[`${control.prefix}seed`]);
     });
     const multiPassMode = state.miniMaxH3TwoPassEnabled || state.miniMaxH3ThreePassEnabled;
-    miniMaxMegapixelsField.style.display = multiPassMode ? "none" : "";
+    miniMaxMegapixelsField.style.display = state.miniMaxH3ThreePassEnabled ? "none" : "";
     miniMaxSeedField.style.display = multiPassMode ? "none" : "";
     miniMaxAdvancedSettings.style.display = multiPassMode ? "none" : "";
     miniMaxTwoPassSettings.style.display = state.miniMaxH3TwoPassEnabled ? "" : "none";
@@ -8622,7 +8670,7 @@ function openBuilder(node) {
         ? "Extra LoRAs are ON. Each can target pass 1, pass 2, or both. The required Turbo LoRA remains separate and pass-2-only."
         : "Optional extra LoRAs are OFF. Enable them, choose a count, then select the target pass for each LoRA.";
     }
-    miniMaxMegapixelsField.style.display = hideMultiPassIgnoredSettings ? "none" : "";
+    miniMaxMegapixelsField.style.display = threePass ? "none" : "";
     miniMaxSeedField.style.display = hideMultiPassIgnoredSettings ? "none" : "";
     miniMaxSamplerSettings.style.display = hideMultiPassIgnoredSettings ? "none" : "";
     miniMaxEasyCacheSettings.style.display = hideMultiPassIgnoredSettings ? "none" : "";
@@ -46406,7 +46454,7 @@ Chrome vault corridor = Sealed industrial passage...</pre>
         tail_loss_frames: cooldownFrames,
         seed: Number(options.seed ?? miniMaxSettings.seed),
         aspect_ratio: String(options.aspectRatio ?? miniMaxSettings.aspect_ratio),
-        megapixels: Number(options.megapixels ?? miniMaxSettings.megapixels),
+        megapixels: Number(options.megapixels ?? (twoPass ? (miniMaxSettings.two_pass_megapixels ?? 2) : miniMaxSettings.megapixels)),
         diffusion_model_name: miniMaxSettings.diffusion_model_name,
         clip_name: miniMaxSettings.clip_name,
         video_vae_name: miniMaxSettings.video_vae_name,

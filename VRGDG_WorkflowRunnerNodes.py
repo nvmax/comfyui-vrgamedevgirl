@@ -49,6 +49,16 @@ _MINIMAX_H3_ASPECT_RATIOS = {
     "16:9 (Widescreen)",
     "21:9 (Ultrawide)",
 }
+_MINIMAX_H3_ASPECT_RATIO_PAIRS = {
+    "1:1 (Square)": (1, 1),
+    "2:3 (Portrait Photo)": (2, 3),
+    "3:2 (Photo)": (3, 2),
+    "3:4 (Portrait Standard)": (3, 4),
+    "4:3 (Standard)": (4, 3),
+    "9:16 (Portrait Widescreen)": (9, 16),
+    "16:9 (Widescreen)": (16, 9),
+    "21:9 (Ultrawide)": (21, 9),
+}
 _MINIMAX_H3_MAX_REFERENCE_IMAGES = 9
 _MINIMAX_H3_MAX_REFERENCE_VIDEOS = 3
 _I2V_UNET_ALIASES = {
@@ -3333,8 +3343,22 @@ def _build_minimax_h3_2pass_api_prompt(payload):
     seed = _int_payload(payload, "seed", 69, 0, 0xFFFFFFFFFFFFFFFF)
     pass1_seed = _int_payload(payload, "pass1_seed", seed, 0, 0xFFFFFFFFFFFFFFFF)
     pass2_seed = _int_payload(payload, "pass2_seed", seed, 0, 0xFFFFFFFFFFFFFFFF)
-    final_width = _int_payload(payload, "final_width", 1920, 64, 16384)
-    final_height = _int_payload(payload, "final_height", 1080, 64, 16384)
+    aspect_ratio = str(payload.get("aspect_ratio") or "16:9 (Widescreen)").strip()
+    if aspect_ratio not in _MINIMAX_H3_ASPECT_RATIOS:
+        aspect_ratio = "16:9 (Widescreen)"
+    megapixels = _float_payload(payload, "megapixels", 2.0, 0.1, 16.0)
+    if "final_width" not in payload or "final_height" not in payload:
+        ratio_w, ratio_h = _MINIMAX_H3_ASPECT_RATIO_PAIRS.get(aspect_ratio, (16, 9))
+        scale = math.sqrt(megapixels * 1024 * 1024 / (ratio_w * ratio_h))
+        final_width = max(64, round(ratio_w * scale / 32) * 32)
+        final_height = max(64, round(ratio_h * scale / 32) * 32)
+        if ratio_w == 16 and ratio_h == 9 and final_width == 1920 and final_height == 1088:
+            final_height = 1080
+        elif ratio_w == 9 and ratio_h == 16 and final_width == 1088 and final_height == 1920:
+            final_width = 1080
+    else:
+        final_width = _int_payload(payload, "final_width", 1920, 64, 16384)
+        final_height = _int_payload(payload, "final_height", 1080, 64, 16384)
     latent_scale = _float_payload(payload, "latent_upscale_scale", 2.0, 1.0, 8.0)
 
     _set_api_input(prompt, "138", "value", video_prompt)

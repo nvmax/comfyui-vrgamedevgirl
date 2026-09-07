@@ -181,6 +181,32 @@ class MiniMaxH3LatentUpscalerLoaderTests(unittest.TestCase):
             module._load_backend = original_backend
             module._MODEL_CACHE.clear()
 
+    def test_ultimate_upscale_params_prefers_relative_name_for_upstream_compat(self):
+        from unittest.mock import patch
+        comfyui_root = ROOT.parents[1]
+        for path in (str(comfyui_root), str(ROOT)):
+            if path not in sys.path:
+                sys.path.insert(0, path)
+
+        module = importlib.import_module("VRGDG_MiniMaxH3LatentUpscaler")
+        original_resolve = module._resolve_registered_model_path
+        fake_abs_path = "C:/models/latent_upscale_models/minimax_h3_latent_upscaler_3d_bf16.safetensors"
+        try:
+            module._resolve_registered_model_path = lambda name: fake_abs_path
+            node = module.VRGDG_MiniMaxH3UltimateUpscaleParams()
+
+            # When folder_paths.get_full_path resolves the model name, emit relative name
+            with patch("folder_paths.get_full_path", side_effect=lambda folder, name: fake_abs_path if name == "minimax_h3_latent_upscaler_3d_bf16.safetensors" else None):
+                result = node.create("minimax_h3_latent_upscaler_3d_bf16.safetensors", 1280, 704, "cuda", "bf16")
+                self.assertEqual(result[0]["model_name"], "minimax_h3_latent_upscaler_3d_bf16.safetensors")
+
+            # Fallback when folder_paths cannot resolve either, emit absolute path
+            with patch("folder_paths.get_full_path", return_value=None):
+                result = node.create("custom_model.safetensors", 1280, 704, "cuda", "bf16")
+                self.assertEqual(result[0]["model_name"], fake_abs_path)
+        finally:
+            module._resolve_registered_model_path = original_resolve
+
 
 if __name__ == "__main__":
     unittest.main()

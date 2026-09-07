@@ -257,8 +257,17 @@ class VRGDG_MiniMaxH3UltimateUpscaleParams:
 
     def create(self, model_name, width, height, device, precision):
         path = _resolve_registered_model_path(model_name)
+        # Upstream MMH3 Ultimate Upscale's load_upscale_model resolves via
+        # folder_paths.get_full_path(), which fails on Windows if given an absolute path.
+        # Prefer the filename/relative name if folder_paths can resolve it directly.
+        name_for_upstream = model_name
+        if not folder_paths.get_full_path(_LATENT_UPSCALE_FOLDER, str(name_for_upstream)):
+            if folder_paths.get_full_path(_LATENT_UPSCALE_FOLDER, os.path.basename(path)):
+                name_for_upstream = os.path.basename(path)
+            else:
+                name_for_upstream = path
         return ({
-            "model_name": path,
+            "model_name": name_for_upstream,
             "width": int(round(int(width) / 32.0)) * 32,
             "height": int(round(int(height) / 32.0)) * 32,
             "device": device,

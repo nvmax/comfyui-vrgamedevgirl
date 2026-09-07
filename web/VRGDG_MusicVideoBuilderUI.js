@@ -324,7 +324,7 @@ const DEFAULT_MINIMAX_H3_SETTINGS = {
   advanced_two_pass_fade_height: 64,
   advanced_two_pass_min_tile_size: 256,
   advanced_two_pass_overlap_mode: "later",
-  advanced_two_pass_overlap_blend: "linear",
+  advanced_two_pass_overlap_blend: "smoothstep",
   advanced_two_pass_upscaler_device: "cuda",
   advanced_two_pass_upscaler_precision: "bf16",
   advanced_two_pass_pass1_megapixels: 0.4,
@@ -546,7 +546,7 @@ function cloneMiniMaxH3Settings(value = {}) {
     two_pass_te_speed_device: String(source.two_pass_te_speed_device || DEFAULT_MINIMAX_H3_SETTINGS.two_pass_te_speed_device),
     two_pass_final_resize_method: String(source.two_pass_final_resize_method || DEFAULT_MINIMAX_H3_SETTINGS.two_pass_final_resize_method),
     two_pass_output_crf: Math.max(0, Math.min(100, Math.trunc(Number(source.two_pass_output_crf ?? DEFAULT_MINIMAX_H3_SETTINGS.two_pass_output_crf)))),
-    advanced_two_pass_vram_preset: ["8gb", "12gb", "16gb", "24gb", "custom"].includes(String(source.advanced_two_pass_vram_preset || "").toLowerCase())
+    advanced_two_pass_vram_preset: ["8gb", "12gb", "16gb", "24gb", "32gb", "custom"].includes(String(source.advanced_two_pass_vram_preset || "").toLowerCase())
       ? String(source.advanced_two_pass_vram_preset).toLowerCase()
       : DEFAULT_MINIMAX_H3_SETTINGS.advanced_two_pass_vram_preset,
     advanced_two_pass_tile_size_mode: ["specific_size", "rows_cols"].includes(String(source.advanced_two_pass_tile_size_mode || "").toLowerCase())
@@ -6371,6 +6371,7 @@ function openBuilder(node) {
     { value: "12gb", label: "12 GB — 512px tiles / 85 frames" },
     { value: "16gb", label: "16 GB — 576px tiles / 119 frames" },
     { value: "24gb", label: "24 GB — 672px tiles / 153 frames" },
+    { value: "32gb", label: "32 GB+ — Full frame (no spatial seams)" },
     { value: "custom", label: "Custom — keep advanced values" },
   ], DEFAULT_MINIMAX_H3_SETTINGS.advanced_two_pass_vram_preset);
   const miniMaxAdvancedTileSizeMode = makeSelect([
@@ -57932,7 +57933,40 @@ Chrome vault corridor = Sealed industrial passage...</pre>
       "12gb": { tile: 512, chunk: 85 },
       "16gb": { tile: 576, chunk: 119 },
       "24gb": { tile: 672, chunk: 153 },
+      "32gb": { tile: 1088, chunk: 170 },
     }[miniMaxAdvancedVramPreset.value];
+    if (miniMaxAdvancedVramPreset.value === "32gb") {
+      miniMaxAdvancedTileSizeMode.value = "rows_cols";
+      miniMaxAdvancedGridRows.value = "1";
+      miniMaxAdvancedGridCols.value = "1";
+      miniMaxAdvancedChunkLength.value = "153";
+      miniMaxAdvancedTemporalOverlap.value = "17";
+      miniMaxAdvancedSpatialWOverlap.value = "0";
+      miniMaxAdvancedSpatialHOverlap.value = "0";
+      miniMaxAdvancedFadeWidth.value = "0";
+      miniMaxAdvancedFadeHeight.value = "0";
+      miniMaxAdvancedMinTileSize.value = "256";
+      miniMaxAdvancedAnchorStrength.value = "0.999";
+      miniMaxAdvancedOverlapBlend.value = "smoothstep";
+      persistMiniMaxSettings();
+      return;
+    }
+    if (miniMaxAdvancedVramPreset.value === "24gb") {
+      miniMaxAdvancedTileSizeMode.value = "rows_cols";
+      miniMaxAdvancedGridRows.value = "1";
+      miniMaxAdvancedGridCols.value = "2";
+      miniMaxAdvancedChunkLength.value = "153";
+      miniMaxAdvancedTemporalOverlap.value = "17";
+      miniMaxAdvancedSpatialWOverlap.value = "128";
+      miniMaxAdvancedSpatialHOverlap.value = "0";
+      miniMaxAdvancedFadeWidth.value = "64";
+      miniMaxAdvancedFadeHeight.value = "0";
+      miniMaxAdvancedMinTileSize.value = "256";
+      miniMaxAdvancedAnchorStrength.value = "0.999";
+      miniMaxAdvancedOverlapBlend.value = "smoothstep";
+      persistMiniMaxSettings();
+      return;
+    }
     if (!preset) return;
     miniMaxAdvancedTileSizeMode.value = "specific_size";
     miniMaxAdvancedTileWidth.value = String(preset.tile);
@@ -57941,10 +57975,11 @@ Chrome vault corridor = Sealed industrial passage...</pre>
     miniMaxAdvancedTemporalOverlap.value = "17";
     miniMaxAdvancedSpatialWOverlap.value = "128";
     miniMaxAdvancedSpatialHOverlap.value = "128";
-    miniMaxAdvancedFadeWidth.value = "32";
-    miniMaxAdvancedFadeHeight.value = "32";
+    miniMaxAdvancedFadeWidth.value = miniMaxAdvancedVramPreset.value === "8gb" ? "32" : "64";
+    miniMaxAdvancedFadeHeight.value = miniMaxAdvancedVramPreset.value === "8gb" ? "32" : "64";
     miniMaxAdvancedMinTileSize.value = "256";
     miniMaxAdvancedAnchorStrength.value = "0.999";
+    miniMaxAdvancedOverlapBlend.value = "smoothstep";
     persistMiniMaxSettings();
   });
   for (const control of [

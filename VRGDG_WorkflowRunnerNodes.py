@@ -3542,11 +3542,18 @@ def _build_minimax_h3_advanced_2pass_api_prompt(payload):
     fade_height = _int_payload(payload, "advanced_fade_height", 64, 0, 16384)
     min_tile_size = _int_payload(payload, "advanced_min_tile_size", 256, 0, 16384)
     overlap_mode = str(payload.get("advanced_overlap_mode") or "later").strip().lower()
-    overlap_blend = str(payload.get("advanced_overlap_blend") or "linear").strip().lower()
+    overlap_blend = str(payload.get("advanced_overlap_blend") or "smoothstep").strip().lower()
     if overlap_mode not in {"earlier", "later"}:
         overlap_mode = "earlier"
     if overlap_blend not in {"linear", "smoothstep", "overwrite", "midpoint"}:
-        overlap_blend = "linear"
+        overlap_blend = "smoothstep"
+    if tile_size_mode == "rows_cols":
+        if grid_rows <= 1:
+            spatial_h_overlap = 0
+            fade_height = 0
+        if grid_cols <= 1:
+            spatial_w_overlap = 0
+            fade_width = 0
     masked_area_noise = _float_payload(
         payload, "advanced_masked_area_noise", _MMH3_SPATIAL_SPLIT_NEW_DEFAULTS["masked_area_noise"], 0.0, 1.0
     )

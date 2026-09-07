@@ -25,11 +25,13 @@ class BuilderMiniMaxAdvancedTwoPassTests(unittest.TestCase):
             '"12gb": { tile: 512, chunk: 85 }',
             '"16gb": { tile: 576, chunk: 119 }',
             '"24gb": { tile: 672, chunk: 153 }',
+            '"32gb": { tile: 1088, chunk: 170 }',
         ):
             self.assertIn(text, BUILDER_SOURCE)
         self.assertIn('advanced_two_pass_pass2_steps: 1', BUILDER_SOURCE)
         self.assertIn('advanced_two_pass_pass2_sampler: "sa_solver"', BUILDER_SOURCE)
         self.assertIn('advanced_two_pass_pass2_scheduler: "simple"', BUILDER_SOURCE)
+        self.assertIn('advanced_two_pass_overlap_blend: "smoothstep"', BUILDER_SOURCE)
 
     def test_resolutions_are_visible_and_expert_controls_are_collapsed(self):
         self.assertIn('"Pass 1 resolution"', BUILDER_SOURCE)

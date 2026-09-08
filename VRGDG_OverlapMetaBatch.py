@@ -404,6 +404,63 @@ class VRGDGOverlapWindow:
         return assembled, info, raw_count, final
 
 
+class VRGDGOverlapAudioWindow:
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "audio": ("AUDIO",),
+                "video_info": ("VHS_VIDEOINFO",),
+                "overlap_info": ("VRGDG_OVERLAP_INFO",),
+            }
+        }
+
+    RETURN_TYPES = ("AUDIO",)
+    RETURN_NAMES = ("window_audio",)
+    FUNCTION = "slice_audio"
+    CATEGORY = "VRGDG/Video/Meta Batch"
+    DESCRIPTION = (
+        "Slices the source soundtrack to the exact overlap window being processed. "
+        "Synthetic leading and trailing video frames receive silence."
+    )
+
+    @classmethod
+    def IS_CHANGED(cls, **kwargs):
+        return float("nan")
+
+    def slice_audio(self, audio, video_info, overlap_info):
+        if not isinstance(overlap_info, dict):
+            raise ValueError("Overlap Audio Window requires overlap_info from VRGDG Overlap Window.")
+        if not isinstance(video_info, dict):
+            raise ValueError("Overlap Audio Window requires video_info from the VHS video loader.")
+
+        waveform = audio["waveform"]
+        sample_rate = int(audio["sample_rate"])
+        if not isinstance(waveform, torch.Tensor) or waveform.ndim != 3:
+            raise ValueError("Overlap Audio Window expects AUDIO waveform [batch, channels, samples].")
+
+        fps = float(video_info.get("loaded_fps", 0.0))
+        if fps <= 0.0:
+            raise ValueError("The VHS video loader reported an invalid loaded frame rate.")
+
+        window = int(overlap_info["window"])
+        overlap = int(overlap_info["overlap"])
+        stride = int(overlap_info["stride"])
+        batch_index = int(overlap_info["batch_index"])
+        start_frame = batch_index * stride - overlap
+        start_sample = round(start_frame * sample_rate / fps)
+        end_sample = round((start_frame + window) * sample_rate / fps)
+        output_samples = end_sample - start_sample
+
+        output = waveform.new_zeros((*waveform.shape[:-1], output_samples))
+        source_start = max(start_sample, 0)
+        source_end = min(end_sample, waveform.shape[-1])
+        if source_end > source_start:
+            output_start = source_start - start_sample
+            output[..., output_start:output_start + source_end - source_start] = waveform[..., source_start:source_end]
+        return ({"waveform": output, "sample_rate": sample_rate},)
+
+
 def _blend_weights(count: int, mode: str, reference: torch.Tensor):
     t = torch.arange(1, count + 1, device=reference.device, dtype=torch.float32)
     t = t / float(count + 1)
@@ -512,6 +569,7 @@ NODE_CLASS_MAPPINGS = {
     "VRGDGOverlapPreset": VRGDGOverlapPreset,
     "VRGDGOverlapMetaBatchManager": VRGDGOverlapMetaBatchManager,
     "VRGDGOverlapWindow": VRGDGOverlapWindow,
+    "VRGDGOverlapAudioWindow": VRGDGOverlapAudioWindow,
     "VRGDGOverlapBlend": VRGDGOverlapBlend,
 }
 
@@ -519,5 +577,6 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "VRGDGOverlapPreset": "VRGDG Overlap Preset",
     "VRGDGOverlapMetaBatchManager": "DEPRECATED - VRGDG Overlap Meta Batch Manager",
     "VRGDGOverlapWindow": "VRGDG Build Overlap Window",
+    "VRGDGOverlapAudioWindow": "VRGDG Build Overlap Audio Window",
     "VRGDGOverlapBlend": "VRGDG Blend Overlap Output",
 }

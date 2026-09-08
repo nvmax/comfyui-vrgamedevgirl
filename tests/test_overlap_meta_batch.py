@@ -121,6 +121,40 @@ class OverlapMetaBatchTests(unittest.TestCase):
         )
         self.assertEqual(info["batch_index"], 1)
 
+    def test_audio_window_tracks_overlapping_video_timeline(self):
+        audio = {
+            "waveform": torch.arange(10, dtype=torch.float32).reshape(1, 1, 10),
+            "sample_rate": 10,
+        }
+        video_info = {"loaded_fps": 10.0}
+        slicer = MODULE.VRGDGOverlapAudioWindow()
+
+        first = {
+            "batch_index": 0,
+            "window": 5,
+            "overlap": 1,
+            "stride": 4,
+        }
+        middle = {**first, "batch_index": 1}
+        final = {**first, "batch_index": 2}
+
+        first_audio, = slicer.slice_audio(audio, video_info, first)
+        middle_audio, = slicer.slice_audio(audio, video_info, middle)
+        final_audio, = slicer.slice_audio(audio, video_info, final)
+
+        torch.testing.assert_close(
+            first_audio["waveform"].flatten(),
+            torch.tensor([0.0, 0.0, 1.0, 2.0, 3.0]),
+        )
+        torch.testing.assert_close(
+            middle_audio["waveform"].flatten(),
+            torch.tensor([3.0, 4.0, 5.0, 6.0, 7.0]),
+        )
+        torch.testing.assert_close(
+            final_audio["waveform"].flatten(),
+            torch.tensor([7.0, 8.0, 9.0, 0.0, 0.0]),
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

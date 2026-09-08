@@ -40,6 +40,7 @@ _VRGDG_SUBMODULES = (
     ".VRGDG_LTXFirstLastGuide",
     ".VRGDG_LTXLoopingSampler",
     ".VRGDG_MiniMaxH3AudioDrive",
+    ".VRGDG_MiniMaxH3FastVAEDecode",
     ".VRGDG_MiniMaxH3LatentUpscaler",
     ".VRGDG_OverlapMetaBatch",
     ".VRGDG_MiniMaxH3ReferenceMedia",

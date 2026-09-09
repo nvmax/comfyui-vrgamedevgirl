@@ -3355,6 +3355,7 @@ function openStoryboardBuilder(payload = {}) {
     selected: new Set(),
     saving: false,
     gemmaSettings: payload.gemmaSettings || payload.gemma_settings || {},
+    sendAdjacentLyricContext: Boolean(payload.sendAdjacentLyricContext ?? payload.send_adjacent_lyric_context ?? payload.builderStoryboardDefaults?.send_adjacent_lyric_context ?? payload.builder_storyboard_defaults?.send_adjacent_lyric_context),
     cameraFlow: String(payload.cameraFlow || payload.camera_flow || "balanced"),
     customCameraFlowSequence: normalizeStoryboardCustomCameraFlowSequence(payload.customCameraFlowSequence || payload.custom_camera_flow_sequence || payload.builderStoryboardDefaults?.custom_camera_flow_sequence || payload.builder_storyboard_defaults?.custom_camera_flow_sequence),
     imageShotFlow: String(payload.imageShotFlow || payload.image_shot_flow || (usesFilmPlanningProfile ? "film_dialogue_coverage" : "intimate")),
@@ -3421,6 +3422,7 @@ function openStoryboardBuilder(payload = {}) {
       minimax_h3_cut_frequency: storyboardCutFrequencyValue(state.cutFrequency),
       camera_guidance: storyboardSpeedGuidance(state.cameraMotionSpeed, "camera"),
       character_guidance: storyboardSpeedGuidance(state.characterMotionSpeed, "character"),
+      send_adjacent_lyric_context: Boolean(state.sendAdjacentLyricContext),
       performance_style: String(state.performanceStyle || ""),
       short_film_planning_mode: normalizeStoryboardShortFilmPlanningMode(state.shortFilmPlanningMode),
       camera_flow: String(state.cameraFlow || ""),
@@ -4147,6 +4149,18 @@ function openStoryboardBuilder(payload = {}) {
   lyricStoryStrengthRow.style.cssText = "grid-column:1/-1;display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:8px;align-items:end;";
   lyricStoryStrengthRow.append(storyField("Lyric Story Strength", lyricStoryStrengthInput), lyricStoryStrengthValue, lyricStoryStrengthHintButton);
   lyricStoryStrengthRow.style.display = usesFilmPlanningProfile ? "none" : "grid";
+  const adjacentLyricContextLabel = document.createElement("label");
+  adjacentLyricContextLabel.style.cssText = "grid-column:1/-1;display:flex;align-items:center;gap:7px;color:#cbd5e1;font-size:12px;font-weight:800;";
+  const adjacentLyricContextInput = document.createElement("input");
+  adjacentLyricContextInput.type = "checkbox";
+  adjacentLyricContextInput.checked = Boolean(state.sendAdjacentLyricContext);
+  adjacentLyricContextLabel.append(adjacentLyricContextInput, document.createTextNode("Send last and next lyric line for context"));
+  adjacentLyricContextLabel.title = "When enabled, each scene story beat receives the previous scene's last lyric line and the next scene's first lyric line when available.";
+  adjacentLyricContextLabel.style.display = usesFilmPlanningProfile ? "none" : "flex";
+  adjacentLyricContextInput.onchange = () => {
+    state.sendAdjacentLyricContext = adjacentLyricContextInput.checked;
+    syncStoryLayerFromInputs({ notify: true });
+  };
   const idLoraDialoguePlanner = document.createElement("div");
   idLoraDialoguePlanner.style.cssText = "grid-column:1/-1;display:none;border:1px solid #155e75;border-radius:8px;background:#082f49;padding:12px;gap:10px;align-items:center;grid-template-columns:minmax(0,1fr) auto;";
   const idLoraDialoguePlannerText = document.createElement("div");
@@ -4202,6 +4216,7 @@ function openStoryboardBuilder(payload = {}) {
     storyLayerHeader,
     shortFilmPlanningModeWrap,
     lyricStoryStrengthRow,
+    adjacentLyricContextLabel,
     overallStoryIdeaField,
     storyField("User Story Arc", userStoryArcInput),
     storyField("Song Story Brief", songStoryBriefInput),
@@ -4715,6 +4730,15 @@ function openStoryboardBuilder(payload = {}) {
     top_p: 0.90,
   });
 
+  const adjacentLyricLine = (lyrics, direction = "first") => {
+    const lines = String(lyrics || "")
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean);
+    if (!lines.length) return "";
+    return direction === "last" ? lines[lines.length - 1] : lines[0];
+  };
+
   const propagateFlfEndStateToNextScene = (scene) => {
     if (state.videoPromptType !== "flf" && scene?.video_prompt_type !== "flf") return;
     const sceneIndex = state.scenes.findIndex((item) => item.id === scene?.id);
@@ -4729,10 +4753,14 @@ function openStoryboardBuilder(payload = {}) {
     const normalized = normalizeScene(scene, 0);
     const sceneIndex = state.scenes.findIndex((item) => item.id === scene.id);
     if (!previousBeat && sceneIndex > 0) previousBeat = String(state.scenes[sceneIndex - 1]?.story_beat || "");
-    if (!previousLyrics && sceneIndex > 0) previousLyrics = String(state.scenes[sceneIndex - 1]?.lyrics || "");
+    if (!previousLyrics && sceneIndex > 0) previousLyrics = adjacentLyricLine(state.scenes[sceneIndex - 1]?.lyrics, "last");
     if (!previousEndState && sceneIndex > 0) previousEndState = String(state.scenes[sceneIndex - 1]?.flf_end_state || "");
     if (!previousCarryForward && sceneIndex > 0) previousCarryForward = String(state.scenes[sceneIndex - 1]?.flf_carry_forward || "");
-    if (!nextLyrics && sceneIndex >= 0 && sceneIndex < state.scenes.length - 1) nextLyrics = String(state.scenes[sceneIndex + 1]?.lyrics || "");
+    if (!nextLyrics && sceneIndex >= 0 && sceneIndex < state.scenes.length - 1) nextLyrics = adjacentLyricLine(state.scenes[sceneIndex + 1]?.lyrics, "first");
+    if (!state.sendAdjacentLyricContext) {
+      previousLyrics = "";
+      nextLyrics = "";
+    }
     if ((state.videoPromptType === "flf" || normalized.video_prompt_type === "flf") && sceneIndex > 0 && previousEndState.trim()) {
       scene.flf_start_state = previousEndState.trim();
     }

@@ -153,7 +153,7 @@ const BUILDER_FONT_STACK = "Segoe UI, Inter, Roboto, Arial, sans-serif";
 const MINIMAX_H3_MODE_OPTIONS = [
   { value: "text_to_video", label: "Text to Video", buttonLabel: "T2V" },
   { value: "image_to_video", label: "Image to Video", buttonLabel: "I2V" },
-  { value: "image_reference_to_video", label: "Image to Video 2 Pass", buttonLabel: "Image to Video\n2 Pass" },
+  { value: "image_reference_to_video", label: "Image + Reference 2 Pass", buttonLabel: "Image + Ref\n2 Pass" },
   { value: "reference_to_video", label: "Reference to Video", buttonLabel: "Ref to\nVideo" },
   { value: "video_to_video", label: "Video to Video", buttonLabel: "V2V" },
 ];
@@ -374,7 +374,7 @@ const MINIMAX_H3_SAGE_ATTENTION_OPTIONS = [
 
 function normalizeMiniMaxH3Mode(value) {
   const clean = String(value || "").trim().toLowerCase().replace(/[\s-]+/g, "_");
-  if (clean === "image_reference_to_video" || clean === "image_plus_reference_to_video" || clean === "i2v_r2v") return "image_reference_to_video";
+  if (["image_reference_to_video", "image_plus_reference_to_video", "i2v_r2v"].includes(clean)) return "image_reference_to_video";
   return MINIMAX_H3_MODE_OPTIONS.some((item) => item.value === clean) ? clean : "text_to_video";
 }
 
@@ -1393,7 +1393,7 @@ function showGemmaBatchFailures(failures, options = {}) {
   const box = document.createElement("div");
   box.style.cssText = "width:min(980px,calc(100vw - 36px));max-height:calc(100vh - 36px);overflow:auto;border:1px solid #991b1b;border-radius:10px;background:#111827;color:#f8fafc;box-shadow:0 22px 80px rgba(0,0,0,.65);padding:16px;box-sizing:border-box;";
   const title = document.createElement("div");
-  title.innerHTML = `<div style="font-size:17px;font-weight:900;color:#fecaca;">Gemma skipped ${items.length} scene${items.length === 1 ? "" : "s"}</div><div style="font-size:12px;color:#cbd5e1;margin-top:5px;">Successful scenes were kept. Only these scenes will be retried.</div>`;
+  title.innerHTML = `<div style="font-size:17px;font-weight:900;color:#fecaca;">LLM skipped ${items.length} scene${items.length === 1 ? "" : "s"}</div><div style="font-size:12px;color:#cbd5e1;margin-top:5px;">Successful scenes were kept. Only these scenes will be retried.</div>`;
   const list = document.createElement("div");
   list.style.cssText = "display:flex;flex-direction:column;gap:12px;margin-top:14px;";
   items.forEach((item) => {
@@ -4383,7 +4383,7 @@ function openBuilder(node) {
   const editImagePromptButtons = [];
   function makeEditImagePromptButton() {
     const button = makeButton("Edit Prompt");
-    button.title = "Ask Gemma to make a focused edit to the current image prompt.";
+  button.title = "Ask the selected LLM runner to make a focused edit to the current image prompt.";
     button.style.display = "none";
     editImagePromptButtons.push(button);
     return button;
@@ -4411,7 +4411,7 @@ function openBuilder(node) {
   const fluxNotes = document.createElement("textarea");
   fluxNotes.placeholder = "Optional pose, camera, wardrobe, lighting, or mood notes...";
   fluxNotes.style.cssText = "width:100%;box-sizing:border-box;min-height:72px;resize:vertical;border:1px solid #3f3f46;border-radius:6px;background:#18181b;color:#fafafa;padding:9px;font-size:12px;line-height:1.45;";
-  const fluxUseTextOnlyGemmaPrompt = makeCheckbox("Use text-only Gemma for Flux prompts", false);
+  const fluxUseTextOnlyGemmaPrompt = makeCheckbox("Use text-only LLM for Flux prompts", false);
   const fluxUseDirectorNotes = makeCheckbox("Use Director Notes in Flux prompt", false);
   const fluxGemmaModelSelect = makeSelect([""], "");
   const fluxMmprojSelect = makeSelect([""], "");
@@ -4460,7 +4460,7 @@ function openBuilder(node) {
   const nbModelSelect = makeSelect(NB_IMAGE_MODELS, DEFAULT_NB_IMAGE_MODEL);
   const nbGemmaModelSelect = makeSelect([""], "");
   const nbMmprojSelect = makeSelect([""], "");
-  const nbUseTextOnlyGemmaPrompt = makeCheckbox("Use text-only Gemma for Nano B prompts", false);
+  const nbUseTextOnlyGemmaPrompt = makeCheckbox("Use text-only LLM for Nano B prompts", false);
   const nbUseDirectorNotes = makeCheckbox("Use Director Notes in Nano B prompt", false);
   const nbNotes = document.createElement("textarea");
   nbNotes.placeholder = "Optional camera, framing, pose, scene, or edit notes for NanoBanana...";
@@ -5786,7 +5786,7 @@ function openBuilder(node) {
           makeField("Flux VAE", fluxVaePicker.wrapper),
         ]),
         makeSettingsSection("Vision LLM Models", [
-          makeField("Gemma vision model", fluxGemmaModelSelect),
+        makeField("Vision LLM model", fluxGemmaModelSelect),
           makeField("Vision mmproj", fluxMmprojSelect),
         ]),
         fluxUseLora.wrapper,
@@ -5835,7 +5835,7 @@ function openBuilder(node) {
           makeField("Model", nbModelSelect),
         ]),
         makeSettingsSection("Vision LLM Models", [
-          makeField("Gemma vision model", nbGemmaModelSelect),
+        makeField("Vision LLM model", nbGemmaModelSelect),
           makeField("Vision mmproj", nbMmprojSelect),
         ]),
         makeNBCreateButton(),
@@ -5939,7 +5939,7 @@ function openBuilder(node) {
         makeField("CLIP", zEnhanceClipPicker.wrapper),
         makeField("VAE", zEnhanceVaePicker.wrapper),
         makeSettingsSection("Vision LLM Models", [
-          makeField("Gemma vision model", zEnhanceGemmaModelSelect),
+        makeField("Vision LLM model", zEnhanceGemmaModelSelect),
           makeField("Vision mmproj", zEnhanceMmprojSelect),
         ]),
         zEnhanceUseLora.wrapper,
@@ -5961,7 +5961,7 @@ function openBuilder(node) {
       label: "LLM Prompting",
       value: "prompting",
       content: makeSettingsPanel([
-        makeField("Gemma notes", zEnhanceGemmaNotes),
+        makeField("LLM notes", zEnhanceGemmaNotes),
         zEnhanceGemmaButton,
         makeField("Enhance prompt", zEnhancePromptPreview),
       ]),
@@ -6833,8 +6833,8 @@ function openBuilder(node) {
   redoButton.title = "Redo";
   playButton.title = "Play / Pause (Space)";
   stopButton.title = "Stop";
-  multiSelectButton.title = "Select multiple scenes, then batch-apply image/video settings or stitch a preview.";
-  multiSelectHintButton.title = "What does Select Multi do?";
+  multiSelectButton.title = "Select multiple scenes, or hold Ctrl/Cmd while clicking scenes in the timeline or scene list.";
+  multiSelectHintButton.title = "What does Select Multi do? Ctrl/Cmd-click also toggles scene selection.";
   deleteSegmentButton.title = "Delete selected segment";
   deleteAllSegmentsButton.title = "Delete every base and insert/overlay segment from the timeline.";
   zoomOutButton.title = "Zoom out timeline";
@@ -7424,6 +7424,7 @@ function openBuilder(node) {
     miniMaxH3PanelSegmentId: "",
     activeTrack: "base",
     multiSelectMode: false,
+    modifierMultiSelectMode: false,
     selectedSegmentIds: [],
     inspectorTab: "scene",
     leftPanelTab: "scenes",
@@ -10860,8 +10861,10 @@ function openBuilder(node) {
 
   function runnerAwareLlmText(value) {
     return String(value || "")
-      .replace(/\b(?:Vision Gemma|Gemma Vision)\b/gi, gemmaRunnerLabel({ vision: true }))
+      .replace(/\b(?:Vision Gemma|Gemma Vision|Gemma vision)\b/gi, gemmaRunnerLabel({ vision: true }))
+      .replace(/\bGemma Local\b/gi, promptRunnerActionName())
       .replace(/\bGemma4?\b/g, promptRunnerActionName())
+      .replace(/\bGemma\b/g, promptRunnerActionName())
       .replace(/\bAPI LLM\b/g, "LLM API")
       .replace(/\bOwn server\b/gi, "Custom Server");
   }
@@ -10930,12 +10933,12 @@ function openBuilder(node) {
   async function describeReferenceImageWithGemma(target, referenceType = "subject", options = {}) {
     const image = target?.image || {};
     if (!hasReferenceImage(image)) {
-      throw new Error(referenceType === "location" ? "This location has no image for Gemma to describe." : "This reference has no image for Gemma to describe.");
+      throw new Error(referenceType === "location" ? `This location has no image for ${gemmaRunnerLabel({ vision: true })} to describe.` : `This reference has no image for ${gemmaRunnerLabel({ vision: true })} to describe.`);
     }
     const modelFile = referenceDescriptionVisionModel();
     const mmprojFile = referenceDescriptionMmproj();
     if (!["lm_studio", "llm_api", "own_server"].includes(state.textGemmaRunner) && (!modelFile || !mmprojFile)) {
-      throw new Error("Choose a Gemma vision model and Vision mmproj first.");
+      throw new Error(`Choose a ${gemmaRunnerLabel({ vision: true })} model and Vision mmproj first.`);
     }
     const data = await postJson("/vrgdg/music_builder/describe_reference_image", {
       ...textGemmaRunnerPayload(),
@@ -11102,17 +11105,35 @@ function openBuilder(node) {
     if (ids.has(segment.id)) ids.delete(segment.id);
     else ids.add(segment.id);
     state.selectedSegmentIds = Array.from(ids);
-    if (!state.activeId || !ids.has(state.activeId)) {
+    if (ids.has(segment.id)) {
       state.activeId = segment.id;
       state.activeTrack = segmentTrack(segment);
-      syncInspector();
+    } else if (state.activeId === segment.id) {
+      const next = allEditableSegments().find((item) => ids.has(item.id));
+      state.activeId = next?.id || "";
+      state.activeTrack = next ? segmentTrack(next) : state.activeTrack || "base";
     }
+    syncInspector();
     render();
   }
 
-  function handleSegmentPick(segment) {
-    if (state.multiSelectMode) toggleMultiSegmentSelection(segment);
-    else {
+  function handleSegmentPick(segment, event = null) {
+    const ctrlPressed = Boolean(event?.ctrlKey || event?.metaKey);
+    if (ctrlPressed) {
+      state.multiSelectMode = true;
+      state.modifierMultiSelectMode = true;
+      toggleMultiSegmentSelection(segment);
+    } else if (state.multiSelectMode) {
+      if (state.modifierMultiSelectMode) {
+        state.multiSelectMode = false;
+        state.modifierMultiSelectMode = false;
+        state.selectedSegmentIds = [];
+        setActiveSegment(segment);
+        selectSegmentGlobalAudioStart(segment);
+      } else {
+        toggleMultiSegmentSelection(segment);
+      }
+    } else {
       setActiveSegment(segment);
       selectSegmentGlobalAudioStart(segment);
     }
@@ -14664,43 +14685,109 @@ function openBuilder(node) {
     state.lyricMapper = normalizeLyricMapper(state.lyricMapper);
     const mapperLines = state.lyricMapper.lines || [];
     if (!mapperLines.length) return 0;
-    let applied = 0;
-    for (const segment of allEditableSegments()) {
-      const lyric = String(segment.lyric_text || "").trim();
-      if (!lyric) {
-        segment.lyric_text = "[instrumental]";
-        segment.lyric_no_lip_sync = true;
-        applied += 1;
-        continue;
-      }
+    // Keep an explicit relationship between a mapper row and its timeline
+    // scene. Text matching alone cannot find a scene that is currently marked
+    // instrumental, which made correcting an instrumental row a no-op.
+    const segments = state.segments.filter((segment) => segment && typeof segment === "object");
+    const byMapperId = new Map(segments
+      .filter((segment) => segment.lyric_mapper_line_id)
+      .map((segment) => [String(segment.lyric_mapper_line_id), segment]));
+    const assignments = new Map();
+    const usedSegments = new Set();
+    const assign = (line, segment) => {
+      if (!line || !segment || usedSegments.has(segment.id)) return false;
+      assignments.set(line.id, segment);
+      usedSegments.add(segment.id);
+      return true;
+    };
+    for (const line of mapperLines) assign(line, byMapperId.get(String(line.id || "")));
+    if (mapperLines.length === segments.length) {
+      mapperLines.forEach((line, index) => assign(line, segments[index]));
+    }
+    for (const line of mapperLines) {
+      if (assignments.has(line.id)) continue;
       let best = null;
       let bestScore = 0;
-      for (const line of mapperLines) {
-        const score = line.instrumental && isInstrumentalLyricText(lyric) ? 1000 : lyricMatchScore(lyric, line.text);
-        if (score > bestScore) {
-          best = line;
-          bestScore = score;
-        }
+      for (const segment of segments) {
+        if (usedSegments.has(segment.id)) continue;
+        const current = String(segment.lyric_text || "").trim();
+        const score = line.instrumental && isInstrumentalLyricText(current)
+          ? 1000
+          : lyricMatchScore(current, line.text);
+        if (score > bestScore) { best = segment; bestScore = score; }
       }
-      if (!best || bestScore < 0.32) continue;
-      if (best.instrumental) {
-        if (overwriteSingers || !String(segment.lyric_text || "").trim()) segment.lyric_text = "[instrumental]";
-        const singers = Array.isArray(best.singers) ? best.singers.filter((value) => !isNoLipSyncSingerChoice(value)) : [];
-        if (overwriteSingers && singers.length) segment.lyric_singers = [...singers];
+      if (best && bestScore >= 0.32) assign(line, best);
+    }
+    // If a mapper row was added while its corresponding scene is still
+    // instrumental, preserve the user's line order as the final fallback.
+    mapperLines.forEach((line, index) => assign(line, segments[index]));
+    let applied = 0;
+    for (const line of mapperLines) {
+      const segment = assignments.get(line.id);
+      if (!segment) continue;
+      segment.lyric_mapper_line_id = line.id;
+      if (line.instrumental) {
+        segment.lyric_text = "[instrumental]";
+        segment.lyric_section = "instrumental";
+        if (overwriteSingers) segment.lyric_singers = [];
         segment.lyric_no_lip_sync = true;
-      } else if (overwriteSingers || !Array.isArray(segment.lyric_singers) || !segment.lyric_singers.length) {
-        const singers = Array.isArray(best.singers) ? [...best.singers] : [];
-        if (best.no_lip_sync || singers.some(isNoLipSyncSingerChoice)) {
+      } else {
+        segment.lyric_text = String(line.text || "").trim();
+        if (String(segment.lyric_section || "").trim().toLowerCase() === "instrumental") segment.lyric_section = "";
+        if (overwriteSingers || !Array.isArray(segment.lyric_singers) || !segment.lyric_singers.length) {
+        const singers = Array.isArray(line.singers) ? [...line.singers] : [];
+        if (line.no_lip_sync || singers.some(isNoLipSyncSingerChoice)) {
           segment.lyric_singers = singers.filter((value) => !isNoLipSyncSingerChoice(value));
           segment.lyric_no_lip_sync = true;
         } else {
           segment.lyric_singers = singers;
           segment.lyric_no_lip_sync = false;
         }
+        }
       }
       applied += 1;
     }
     return applied;
+  }
+
+  function syncLyricMapperFromSegments() {
+    const segments = state.segments.filter((segment) => segment && typeof segment === "object");
+    if (!segments.length) return 0;
+    const mapper = normalizeLyricMapper(state.lyricMapper);
+    const lines = Array.isArray(mapper.lines) ? mapper.lines : [];
+    const byId = new Map(lines.map((line) => [String(line.id || ""), line]));
+    const used = new Set();
+    const pairs = [];
+    const pair = (segment, line) => {
+      if (!segment || !line || used.has(line.id)) return false;
+      used.add(line.id); pairs.push([segment, line]); return true;
+    };
+    for (const segment of segments) pair(segment, byId.get(String(segment.lyric_mapper_line_id || "")));
+    if (lines.length === segments.length) segments.forEach((segment, index) => pair(segment, lines[index]));
+    for (const segment of segments) {
+      if (pairs.some(([item]) => item === segment)) continue;
+      let best = null; let score = 0;
+      for (const line of lines) {
+        if (used.has(line.id)) continue;
+        const candidate = segment.lyric_no_lip_sync && isInstrumentalLyricText(segment.lyric_text) ? 1 : lyricMatchScore(segment.lyric_text, line.text);
+        if (candidate > score) { best = line; score = candidate; }
+      }
+      if (best && score >= 0.32) pair(segment, best);
+    }
+    if (!lines.length) {
+      for (const segment of segments) lines.push({ id: `lyric_line_${Date.now()}_${lines.length}`, text: "", singers: [], instrumental: false });
+      segments.forEach((segment, index) => pair(segment, lines[index]));
+    }
+    for (const [segment, line] of pairs) {
+      const instrumental = Boolean(segment.lyric_no_lip_sync && isInstrumentalLyricText(segment.lyric_text));
+      line.instrumental = instrumental;
+      line.text = instrumental ? "" : String(segment.lyric_text || "").trim();
+      line.singers = instrumental ? [] : (Array.isArray(segment.lyric_singers) ? [...segment.lyric_singers] : []);
+      line.no_lip_sync = Boolean(segment.lyric_no_lip_sync && !instrumental);
+      segment.lyric_mapper_line_id = line.id;
+    }
+    state.lyricMapper = normalizeLyricMapper({ ...mapper, lines });
+    return pairs.length;
   }
 
   function normalizeFluxReferenceBuilder(value = {}) {
@@ -15399,6 +15486,7 @@ function openBuilder(node) {
 
   function setMultiSelectMode(enabled) {
     state.multiSelectMode = Boolean(enabled);
+    state.modifierMultiSelectMode = false;
     if (!state.multiSelectMode) {
       state.selectedSegmentIds = [];
     } else if (state.activeId && !state.selectedSegmentIds.length) {
@@ -15487,7 +15575,7 @@ function openBuilder(node) {
     const clickCard = document.createElement("div");
     clickCard.style.cssText = "border:1px solid #334155;border-radius:7px;background:#0f172a;padding:11px;display:flex;align-items:center;justify-content:space-between;gap:12px;";
     const clickCopy = document.createElement("div");
-    clickCopy.innerHTML = `<strong style="color:#e0f2fe;">Click timeline clips</strong><br><span style="font-size:12px;color:#94a3b8;">Turn multi-select on, then click any base scene or insert to add or remove it.</span>`;
+    clickCopy.innerHTML = `<strong style="color:#e0f2fe;">Click timeline clips</strong><br><span style="font-size:12px;color:#94a3b8;">Turn multi-select on, or hold Ctrl/Cmd while clicking any base scene or insert to add or remove it.</span>`;
     const clickSelect = makeButton("Start Clicking", "primary");
     clickSelect.style.flex = "0 0 auto";
     clickCard.append(clickCopy, clickSelect);
@@ -20102,7 +20190,7 @@ function openBuilder(node) {
       const rightHandle = document.createElement("div");
       rightHandle.style.cssText = "position:absolute;right:0;top:0;bottom:0;width:8px;background:rgba(255,255,255,.25);cursor:ew-resize;z-index:4;";
       block.append(leftHandle, rightHandle);
-      block.onclick = () => handleSegmentPick(segment);
+      block.onclick = (event) => handleSegmentPick(segment, event);
       block.oncontextmenu = (event) => openSegmentContextMenu(event, segment);
       enableImageDrop(block, segment);
       enableLutDrop(block, segment);
@@ -20240,6 +20328,8 @@ function openBuilder(node) {
             lyricTextInput.dataset.vrgdgUserEdited = "0";
           }
           lyricBox.dataset.savedValue = lyricBox.value;
+          applyLyricSectionsFromReferenceText(state.segments, state.lyricMapper?.source_text || "");
+          syncLyricMapperFromSegments();
           autoSaveSessionQuiet("timeline line note edited");
         };
         lyricBox.onchange = saveTimelineLyricEdit;
@@ -21448,7 +21538,7 @@ function openBuilder(node) {
         if (finishEvent?.pointerId != null && finishEvent.pointerId !== pointerId) return;
         const shouldSelectScene = finishEvent?.type === "pointerup" && mode === "move" && !dragStarted;
         cleanup();
-        if (shouldSelectScene) handleSegmentPick(segment);
+        if (shouldSelectScene) handleSegmentPick(segment, finishEvent);
       };
       activeSegmentDragCleanup = cleanup;
       window.addEventListener("pointermove", move, { passive: false });
@@ -21496,11 +21586,11 @@ function openBuilder(node) {
       const isMultiSelected = isSegmentMultiSelected(segment);
       row.style.cssText = `width:100%;text-align:left;border:${isActive || isMultiSelected ? "3px" : "1px"} solid ${isActive || isMultiSelected ? "#ef4444" : inserted ? "#f59e0b" : "#3f3f46"};border-radius:7px;background:${isActive || isMultiSelected ? "#3f1d24" : inserted ? "#451a03" : "#27272a"};color:#fafafa;padding:8px;margin-bottom:8px;cursor:pointer;box-shadow:${isActive || isMultiSelected ? "0 0 0 2px rgba(239,68,68,.25), 0 0 18px rgba(239,68,68,.42)" : "none"};`;
       row.innerHTML = `<div style="font-weight:800;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${index + 1}. ${escapeHtml(segment.label || "Scene")}</div><div style="font-size:11px;color:#a1a1aa;margin-top:4px;">Duration in seconds: ${formatDurationSeconds(segment.start, segment.end)}</div><div style="font-size:11px;color:#71717a;margin-top:2px;">${formatTime(segment.start)} - ${formatTime(segment.end)}</div>${status}${thumb}`;
-      row.onclick = () => handleSegmentPick(segment);
+      row.onclick = (event) => handleSegmentPick(segment, event);
       row.onkeydown = (event) => {
         if (event.key === "Enter" || event.key === " ") {
           event.preventDefault();
-          handleSegmentPick(segment);
+          handleSegmentPick(segment, event);
         }
       };
       const optionsButton = document.createElement("span");
@@ -21542,11 +21632,11 @@ function openBuilder(node) {
       const isMultiSelected = isSegmentMultiSelected(segment);
       row.style.cssText = `width:100%;text-align:left;border:${isActive || isMultiSelected ? "3px" : "1px"} solid ${isActive || isMultiSelected ? "#ef4444" : "#f97316"};border-radius:7px;background:${isActive || isMultiSelected ? "#3f1d24" : "#431407"};color:#fafafa;padding:8px;margin-bottom:8px;cursor:pointer;box-shadow:${isActive || isMultiSelected ? "0 0 0 2px rgba(239,68,68,.25), 0 0 18px rgba(239,68,68,.42)" : "none"};`;
       row.innerHTML = `<div style="font-weight:800;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Insert ${index + 1}. ${escapeHtml(segment.label || "Insert")}</div><div style="font-size:11px;color:#fed7aa;margin-top:4px;">${formatTime(segment.start)} - ${formatTime(segment.end)} | ${formatDurationSeconds(segment.start, segment.end)}s</div>${thumb}`;
-      row.onclick = () => handleSegmentPick(segment);
+      row.onclick = (event) => handleSegmentPick(segment, event);
       row.onkeydown = (event) => {
         if (event.key === "Enter" || event.key === " ") {
           event.preventDefault();
-          handleSegmentPick(segment);
+          handleSegmentPick(segment, event);
         }
       };
       enableImageDrop(row, segment);
@@ -25255,7 +25345,17 @@ function openBuilder(node) {
     const sectionEntries = Array.from(sectionMap.entries());
     let applied = 0;
     for (const segment of segments) {
-      if (!segment || String(segment.lyric_section || "").trim()) continue;
+      if (!segment) continue;
+      const existingSection = String(segment.lyric_section || "").trim().toLowerCase();
+      const lyricText = String(segment.lyric_text || "").trim();
+      // Instrumental is a derived status when a scene contains no lyric text.
+      // Do not let that old marker block a later lyric correction from getting
+      // its real section assigned.
+      if (existingSection && existingSection !== "instrumental") continue;
+      if (!lyricText || isInstrumentalLyricText(lyricText)) {
+        segment.lyric_section = "instrumental";
+        continue;
+      }
       const lyricLines = String(segment.lyric_text || "")
         .replace(/\r\n/g, "\n")
         .replace(/\r/g, "\n")
@@ -25748,12 +25848,14 @@ function openBuilder(node) {
           text.disabled = instrumental.input.checked;
           singers.disabled = instrumental.input.checked;
           if (instrumental.input.checked) {
+            if (text.value.trim()) text.dataset.preInstrumentalText = text.value;
             text.value = "";
             for (const input of singers.querySelectorAll("[data-lyric-singer-choice='1']")) {
               input.checked = false;
               input.disabled = true;
             }
           } else {
+            if (!text.value.trim() && text.dataset.preInstrumentalText) text.value = text.dataset.preInstrumentalText;
             for (const input of singers.querySelectorAll("[data-lyric-singer-choice='1']")) {
               input.disabled = false;
             }
@@ -25808,6 +25910,8 @@ function openBuilder(node) {
         source_text: sourceLyrics.value || "",
         lines: collectLines(),
       });
+      applyLyricMapperToSegments({ overwriteSingers: true });
+      applyLyricSectionsFromReferenceText(state.segments, state.lyricMapper.source_text);
       collectLyricIngredientsMappings();
       if (currentVideoMode() === "ingredients") applyIngredientsReferenceMappings(state.fluxReferenceBuilder);
       await saveSession({ quiet: true, throwOnError: true });
@@ -25831,6 +25935,8 @@ function openBuilder(node) {
         await saveMapper();
         pushHistory();
         const count = applyLyricMapperToSegments({ overwriteSingers: true });
+        applyLyricSectionsFromReferenceText(state.segments, state.lyricMapper.source_text);
+        syncLyricMapperFromSegments();
         const syncedIngredients = syncIngredientsSceneMapFromSubjectMappings(state.fluxReferenceBuilder);
         state.fluxReferenceBuilder = syncedIngredients.refs;
         if (currentVideoMode() === "ingredients") applyIngredientsReferenceMappings(state.fluxReferenceBuilder);
@@ -26968,6 +27074,8 @@ function openBuilder(node) {
               const segment = scenes.find((item) => item.id === row.dataset.reviewSegmentId);
               if (segment) applyReviewRowValues(row, segment, false);
             }
+            applyLyricSectionsFromReferenceText(state.segments, state.lyricMapper?.source_text || "");
+            syncLyricMapperFromSegments();
             const syncedIngredients = syncIngredientsSceneMapFromSubjectMappings(state.fluxReferenceBuilder);
             state.fluxReferenceBuilder = syncedIngredients.refs;
             if (currentVideoMode() === "ingredients") applyIngredientsReferenceMappings(state.fluxReferenceBuilder);
@@ -27099,9 +27207,14 @@ function openBuilder(node) {
       };
       const updateDisabled = () => {
         if (instrumental.input.checked) {
+          if (!isInstrumentalLyricText(text.value)) text.dataset.reviewPreInstrumentalText = text.value;
           text.value = "[instrumental]";
           text.dataset.reviewRawLyricText = "[instrumental]";
           broll.input.checked = false;
+        } else if (isInstrumentalLyricText(text.value)) {
+          const restored = String(text.dataset.reviewPreInstrumentalText || "");
+          text.value = restored;
+          text.dataset.reviewRawLyricText = restored;
         }
         if (broll.input.checked && isInstrumentalLyricText(text.value)) {
           text.value = text.dataset.reviewRawLyricText && !isInstrumentalLyricText(text.dataset.reviewRawLyricText)
@@ -27213,6 +27326,8 @@ function openBuilder(node) {
           if (!segment) continue;
           applyReviewRowValues(row, segment, true, { lyricTextOverride: lyricOverrides.get(segment.id) });
         }
+        applyLyricSectionsFromReferenceText(state.segments, state.lyricMapper?.source_text || "");
+        syncLyricMapperFromSegments();
         const syncedIngredients = syncIngredientsSceneMapFromSubjectMappings(state.fluxReferenceBuilder);
         state.fluxReferenceBuilder = syncedIngredients.refs;
         if (currentVideoMode() === "ingredients") applyIngredientsReferenceMappings(state.fluxReferenceBuilder);
@@ -44442,6 +44557,14 @@ Chrome vault corridor = Sealed industrial passage...</pre>
       await autoSaveSessionQuiet("MiniMax timeline segments created from storyboard");
       return { message: `Created ${nextSegments.length} MiniMax timeline segment${nextSegments.length === 1 ? "" : "s"} from the reviewed storyboard.` };
     };
+    const storyboardRunnerSettings = textGemmaRunnerPayload();
+    const storyboardUsesQwen = state.textGemmaRunner === "qwen_local";
+    const storyboardSelectedModel = storyboardUsesQwen
+      ? String(storyboardRunnerSettings.qwen_model_file || "").trim()
+      : String(storyboardRunnerSettings.gemma_model_file || "").trim();
+    const storyboardSelectedMmproj = storyboardUsesQwen
+      ? String(storyboardRunnerSettings.qwen_mmproj_file || "").trim()
+      : String(i2vMmprojSelect.value || mmprojSelect.value || "").trim();
     window.VRGDGStoryboardBuilder.open({
       projectFolder: projectInput.value || state.projectFolder || "",
       projectVideoEngine: normalizeProjectVideoEngine(state.projectVideoEngine),
@@ -44485,10 +44608,10 @@ Chrome vault corridor = Sealed industrial passage...</pre>
       referenceBuilder: storyboardReferenceBuilderWithIdLoraRefs(state.fluxReferenceBuilder),
       storyLayer: normalizeBuilderStoryLayer(state.builderStoryLayer),
       gemmaSettings: {
-        ...textGemmaRunnerPayload(),
-        model_file: i2vTextGemmaModelSelect.value || t2iTextGemmaModelSelect.value || "",
-        vision_model_file: i2vGemmaModelSelect.value || gemmaModelSelect.value || "",
-        mmproj_file: i2vMmprojSelect.value || mmprojSelect.value || "",
+        ...storyboardRunnerSettings,
+        model_file: storyboardSelectedModel,
+        vision_model_file: storyboardSelectedModel,
+        mmproj_file: storyboardSelectedMmproj,
         n_ctx: normalizeGemmaContextLimit(state.gemmaContextLimit),
         n_gpu_layers: normalizeGemmaGpuLayers(state.gemmaGpuLayers),
         n_threads: 8,
@@ -47281,7 +47404,7 @@ Chrome vault corridor = Sealed industrial passage...</pre>
     const preview = document.createElement("div");
     preview.innerHTML = `<strong style="color:#e0f2fe;">Stitch Preview</strong><br>Use the Stitch Preview menu option to make a quick complete video from selected scenes or from a start/end scene range. Inserts are included automatically, and no Gemma, image generation, or video rendering is run.`;
     const note = document.createElement("div");
-    note.textContent = "Selected scenes turn red. Open Select Multi again to change the list, keep clicking, or exit multi-select and return to normal single-scene editing.";
+    note.textContent = "Selected scenes turn red. Ctrl/Cmd-click toggles scenes on or off; a plain click returns to normal single-scene editing.";
     note.style.cssText = "border:1px solid #334155;border-radius:6px;background:#0f172a;padding:9px;color:#cbd5e1;";
     body.append(batch, selectedBatch, preview, note);
     const ok = makeButton("Got it", "primary");

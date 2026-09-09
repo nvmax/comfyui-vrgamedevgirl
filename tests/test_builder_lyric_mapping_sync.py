@@ -6,7 +6,8 @@ UI_SOURCE = (Path(__file__).parents[1] / "web" / "VRGDG_MusicVideoBuilderUI.js")
 
 def test_mapper_apply_keeps_stable_scene_link_for_instrumental_corrections():
     assert "lyric_mapper_line_id" in UI_SOURCE
-    assert "If a mapper row was added while its corresponding scene is still instrumental" in UI_SOURCE
+    assert "If a mapper row was added while its corresponding scene is still" in UI_SOURCE
+    assert "instrumental, preserve the user's line order as the final fallback." in UI_SOURCE
     assert "segment.lyric_text = String(line.text || \"\").trim();" in UI_SOURCE
 
 

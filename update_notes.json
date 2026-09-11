@@ -3,6 +3,46 @@
   "product": "AI Video Builder",
   "releases": [
     {
+      "id": "2026-09-08-builder-storyboard-match-grain-workflows",
+      "version": "2026.09.08-builder-storyboard-match-grain-workflows",
+      "date": "2026-09-08",
+      "title": "Builder lyric mapping, Storyboard context, and Match Grain workflows",
+      "commit": "4341371",
+      "restart_required": false,
+      "guide_url": "https://github.com/vrgamegirl19/comfyui-vrgamedevgirl/pull/177",
+      "sections": [
+        {
+          "title": "Added",
+          "items": [
+            "Added Ctrl/Cmd-click multi-selection for base scenes and inserts in both the Video Builder timeline and scene lists.",
+            "Added an optional Storyboard Builder setting that sends the previous and next lyric lines as context when generating each scene beat.",
+            "Added ready-to-use Match Grain workflows for still images and VHS meta-batched video processing."
+          ]
+        },
+        {
+          "title": "Improved",
+          "items": [
+            "Video Builder and Storyboard Builder now use the selected LLM Runner models and runner names consistently in prompts, progress text, controls, and error messages.",
+            "Renamed the MiniMax two-pass image mode to Image + Reference 2 Pass so its scene-image and optional Reference Builder inputs are clearer."
+          ]
+        },
+        {
+          "title": "Fixed",
+          "items": [
+            "Fixed lyric mapper edits failing to update scenes previously marked instrumental by keeping stable mapper-row links and synchronizing lyric text, singers, instrumental status, and lyric sections in both directions.",
+            "Fixed unchecking instrumental in lyric editing and review views so the previous lyric text is restored instead of remaining empty."
+          ]
+        },
+        {
+          "title": "Compatibility Notes",
+          "items": [
+            "Hard-refresh the browser after updating so the revised Video Builder and Storyboard Builder JavaScript is loaded.",
+            "The Match Grain video workflow requires ComfyUI-VideoHelperSuite for video loading, meta-batching, audio passthrough, and video output."
+          ]
+        }
+      ]
+    },
+    {
       "id": "2026-09-04-pr173-video-builder-image-reference-and-new-nodes",
       "version": "2026.09.04-pr173-video-builder-image-reference-and-new-nodes",
       "date": "2026-09-04",

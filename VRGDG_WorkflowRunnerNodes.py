@@ -5082,6 +5082,11 @@ def _stitch_scene_videos(payload):
     scene_paths = []
     for index, raw_path in enumerate(raw_paths, start=1):
         path = os.path.abspath(str(raw_path or "").strip().strip('"'))
+        # Guard against intermediate multi-pass scratch/stage1 backups if a final rendered clip is present:
+        if ("-stage1_" in path.lower() or "_stage1_" in path.lower() or "-stage1." in path.lower()) and target_dir:
+            candidate_final = os.path.join(target_dir, f"video_{index:04d}-audio.mp4")
+            if os.path.isfile(candidate_final):
+                path = candidate_final
         if not os.path.isfile(path):
             raise FileNotFoundError(f"Scene {index} video was not found: {path}")
         if os.path.splitext(path)[1].lower() not in {".mp4", ".mov", ".mkv", ".webm", ".avi", ".m4v"}:
@@ -5120,6 +5125,20 @@ def _stitch_scene_videos(payload):
         raise FileNotFoundError(f"Audio file was not found: {audio_path}")
 
     ffmpeg_path = _find_ffmpeg_path()
+
+    if (target_width <= 0 or target_height <= 0) and scene_paths:
+        probed_sizes = []
+        for p in scene_paths:
+            try:
+                pw, ph = _probe_video_size(p, ffmpeg_path)
+                if pw > 0 and ph > 0:
+                    probed_sizes.append((pw, ph))
+            except Exception:
+                pass
+        if probed_sizes:
+            target_width = max(pw for pw, _ in probed_sizes)
+            target_height = max(ph for _, ph in probed_sizes)
+
     timeline_sync_paths = []
     timeline_sync_frame_count = 0
     concat_scene_paths = scene_paths
@@ -5140,12 +5159,19 @@ def _stitch_scene_videos(payload):
             target_frames = max(1, end_frame - start_frame)
             timeline_sync_frame_count += target_frames
             sync_path = os.path.join(target_dir, f"_temp_timeline_scene_{index:04d}.mp4")
-            sync_filter = (
-                f"fps={timeline_fps},"
-                "tpad=stop_mode=clone:stop_duration=1,"
-                f"trim=start_frame=0:end_frame={target_frames},"
-                "setpts=PTS-STARTPTS"
-            )
+            sync_filter_parts = [
+                f"fps={timeline_fps}",
+                "tpad=stop_mode=clone:stop_duration=1",
+                f"trim=start_frame=0:end_frame={target_frames}",
+                "setpts=PTS-STARTPTS",
+            ]
+            if target_width > 0 and target_height > 0:
+                sync_filter_parts.extend([
+                    f"scale={target_width}:{target_height}:force_original_aspect_ratio=increase",
+                    f"crop={target_width}:{target_height}",
+                    "setsar=1",
+                ])
+            sync_filter = ",".join(sync_filter_parts)
             sync_cmd = [
                 ffmpeg_path,
                 "-y",

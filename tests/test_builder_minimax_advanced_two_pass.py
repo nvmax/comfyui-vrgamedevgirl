@@ -205,7 +205,14 @@ class BuilderMiniMaxAdvancedTwoPassTests(unittest.TestCase):
         self.assertIn("pass2_prompt: String(segment?.minimax_h3_pass2_prompt || \"\")", BUILDER_SOURCE)
         self.assertIn('pass2_prompt: String(segment?.minimax_h3_pass2_prompt || ""),', BUILDER_SOURCE)
         self.assertIn("Object.prototype.hasOwnProperty.call(scene, \"minimax_h3_pass2_prompt\")", BUILDER_SOURCE)
-        self.assertIn('"minimax_h3_prompt", "minimax_h3_pass2_prompt"', BUILDER_SOURCE)
+    def test_stitch_guards_against_stage1_and_unifies_resolution(self):
+        self.assertIn("resolveStitchVideo", BUILDER_SOURCE)
+        self.assertIn("_stage1", BUILDER_SOURCE)
+        self.assertIn("preRenderVideoPath", BUILDER_SOURCE)
+        self.assertIn("candidate_final = os.path.join(target_dir, f\"video_{index:04d}-audio.mp4\")", RUNNER_SOURCE)
+        self.assertIn("pw, ph = _probe_video_size(p, ffmpeg_path)", RUNNER_SOURCE)
+        self.assertIn("target_width = max(pw for pw, _ in probed_sizes)", RUNNER_SOURCE)
+
 
 if __name__ == "__main__":
     unittest.main()

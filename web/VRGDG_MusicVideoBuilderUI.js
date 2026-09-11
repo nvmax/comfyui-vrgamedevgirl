@@ -309,8 +309,11 @@ const DEFAULT_MINIMAX_H3_SETTINGS = {
   three_pass_pass3_seed: 69,
   three_pass_pass3_te_speed: false,
   advanced_two_pass_vram_preset: "12gb",
-  advanced_two_pass_defaults_version: 2,
-  advanced_two_pass_tile_size_mode: "rows_cols",
+  advanced_two_pass_defaults_version: 4,
+  // The 12 GB profile advertises explicit 512px tiles.  Keep the initial
+  // state aligned with that profile instead of relying on a select-change
+  // event to switch away from the legacy rows/columns defaults.
+  advanced_two_pass_tile_size_mode: "specific_size",
   advanced_two_pass_tile_width: 512,
   advanced_two_pass_tile_height: 512,
   advanced_two_pass_grid_rows: 3,
@@ -465,6 +468,51 @@ function cloneMiniMaxH3Settings(value = {}) {
   const source = value && typeof value === "object" ? value : {};
   const hasCurrentTwoPassDefaults = Number(source.two_pass_defaults_version || 0) >= 1;
   const hasCurrentAdvancedTwoPassDefaults = Number(source.advanced_two_pass_defaults_version || 0) >= 2;
+  // Version 2 displayed the 12 GB preset while retaining the older 3x5
+  // rows/columns tiling.  Migrate only that exact untouched preset; a user
+  // who changed any of the tiling values is intentionally left alone.
+  const migrateLegacyTwelveGbPreset = Number(source.advanced_two_pass_defaults_version || 0) < 3
+    && String(source.advanced_two_pass_vram_preset || "12gb").toLowerCase() === "12gb"
+    && String(source.advanced_two_pass_tile_size_mode || "rows_cols").toLowerCase() === "rows_cols"
+    && Number(source.advanced_two_pass_tile_width ?? 512) === 512
+    && Number(source.advanced_two_pass_tile_height ?? 512) === 512
+    && Number(source.advanced_two_pass_grid_rows ?? 3) === 3
+    && Number(source.advanced_two_pass_grid_cols ?? 5) === 5
+    && Number(source.advanced_two_pass_chunk_length ?? 85) === 85
+    && Number(source.advanced_two_pass_temporal_overlap ?? 17) === 17
+    && Number(source.advanced_two_pass_spatial_w_overlap ?? 128) === 128
+    && Number(source.advanced_two_pass_spatial_h_overlap ?? 128) === 128
+    && Number(source.advanced_two_pass_fade_width ?? 64) === 64
+    && Number(source.advanced_two_pass_fade_height ?? 64) === 64
+    && Number(source.advanced_two_pass_min_tile_size ?? 256) === 256;
+  // Version 3's 24 GB handler retained a 1x2 rows/columns experiment even
+  // though the preset was labelled as 672px tiles. Version 3 also ran the
+  // full-frame 32 GB profile with a 153-frame chunk despite its 170-frame
+  // capacity. Migrate the exact old preset states, never custom profiles.
+  const migrateLegacyTwentyFourGbPreset = Number(source.advanced_two_pass_defaults_version || 0) < 4
+    && String(source.advanced_two_pass_vram_preset || "").toLowerCase() === "24gb"
+    && String(source.advanced_two_pass_tile_size_mode || "").toLowerCase() === "rows_cols"
+    && Number(source.advanced_two_pass_grid_rows ?? 1) === 1
+    && Number(source.advanced_two_pass_grid_cols ?? 2) === 2
+    && Number(source.advanced_two_pass_chunk_length ?? 153) === 153
+    && Number(source.advanced_two_pass_temporal_overlap ?? 17) === 17
+    && Number(source.advanced_two_pass_spatial_w_overlap ?? 128) === 128
+    && Number(source.advanced_two_pass_spatial_h_overlap ?? 0) === 0
+    && Number(source.advanced_two_pass_fade_width ?? 64) === 64
+    && Number(source.advanced_two_pass_fade_height ?? 0) === 0
+    && Number(source.advanced_two_pass_min_tile_size ?? 256) === 256;
+  const migrateLegacyThirtyTwoGbPreset = Number(source.advanced_two_pass_defaults_version || 0) < 4
+    && String(source.advanced_two_pass_vram_preset || "").toLowerCase() === "32gb"
+    && String(source.advanced_two_pass_tile_size_mode || "").toLowerCase() === "rows_cols"
+    && Number(source.advanced_two_pass_grid_rows ?? 1) === 1
+    && Number(source.advanced_two_pass_grid_cols ?? 1) === 1
+    && Number(source.advanced_two_pass_chunk_length ?? 153) === 153
+    && Number(source.advanced_two_pass_temporal_overlap ?? 17) === 17
+    && Number(source.advanced_two_pass_spatial_w_overlap ?? 0) === 0
+    && Number(source.advanced_two_pass_spatial_h_overlap ?? 0) === 0
+    && Number(source.advanced_two_pass_fade_width ?? 0) === 0
+    && Number(source.advanced_two_pass_fade_height ?? 0) === 0
+    && Number(source.advanced_two_pass_min_tile_size ?? 256) === 256;
   const sourceLoras = Array.isArray(source.loras)
     ? source.loras
     : Array.from({ length: 4 }, (_, index) => ({
@@ -549,14 +597,22 @@ function cloneMiniMaxH3Settings(value = {}) {
     advanced_two_pass_vram_preset: ["8gb", "12gb", "16gb", "24gb", "32gb", "custom"].includes(String(source.advanced_two_pass_vram_preset || "").toLowerCase())
       ? String(source.advanced_two_pass_vram_preset).toLowerCase()
       : DEFAULT_MINIMAX_H3_SETTINGS.advanced_two_pass_vram_preset,
-    advanced_two_pass_tile_size_mode: ["specific_size", "rows_cols"].includes(String(source.advanced_two_pass_tile_size_mode || "").toLowerCase())
+    advanced_two_pass_tile_size_mode: (migrateLegacyTwelveGbPreset || migrateLegacyTwentyFourGbPreset)
+      ? "specific_size"
+      : ["specific_size", "rows_cols"].includes(String(source.advanced_two_pass_tile_size_mode || "").toLowerCase())
       ? String(source.advanced_two_pass_tile_size_mode).toLowerCase()
       : DEFAULT_MINIMAX_H3_SETTINGS.advanced_two_pass_tile_size_mode,
-    advanced_two_pass_tile_width: Math.max(32, Math.min(16384, Math.trunc(Number(source.advanced_two_pass_tile_width ?? DEFAULT_MINIMAX_H3_SETTINGS.advanced_two_pass_tile_width)))),
-    advanced_two_pass_tile_height: Math.max(32, Math.min(16384, Math.trunc(Number(source.advanced_two_pass_tile_height ?? DEFAULT_MINIMAX_H3_SETTINGS.advanced_two_pass_tile_height)))),
+    advanced_two_pass_tile_width: migrateLegacyTwentyFourGbPreset
+      ? 672
+      : Math.max(32, Math.min(16384, Math.trunc(Number(source.advanced_two_pass_tile_width ?? DEFAULT_MINIMAX_H3_SETTINGS.advanced_two_pass_tile_width)))),
+    advanced_two_pass_tile_height: migrateLegacyTwentyFourGbPreset
+      ? 672
+      : Math.max(32, Math.min(16384, Math.trunc(Number(source.advanced_two_pass_tile_height ?? DEFAULT_MINIMAX_H3_SETTINGS.advanced_two_pass_tile_height)))),
     advanced_two_pass_grid_rows: Math.max(1, Math.min(9, Math.trunc(Number(source.advanced_two_pass_grid_rows ?? DEFAULT_MINIMAX_H3_SETTINGS.advanced_two_pass_grid_rows)))),
     advanced_two_pass_grid_cols: Math.max(1, Math.min(9, Math.trunc(Number(source.advanced_two_pass_grid_cols ?? DEFAULT_MINIMAX_H3_SETTINGS.advanced_two_pass_grid_cols)))),
-    advanced_two_pass_chunk_length: Math.max(17, Math.min(100000, Math.trunc(Number(source.advanced_two_pass_chunk_length ?? DEFAULT_MINIMAX_H3_SETTINGS.advanced_two_pass_chunk_length)))),
+    advanced_two_pass_chunk_length: migrateLegacyThirtyTwoGbPreset
+      ? 170
+      : Math.max(17, Math.min(100000, Math.trunc(Number(source.advanced_two_pass_chunk_length ?? DEFAULT_MINIMAX_H3_SETTINGS.advanced_two_pass_chunk_length)))),
     advanced_two_pass_temporal_overlap: Math.max(0, Math.min(100000, Math.trunc(Number(source.advanced_two_pass_temporal_overlap ?? DEFAULT_MINIMAX_H3_SETTINGS.advanced_two_pass_temporal_overlap)))),
     advanced_two_pass_anchor_strength: Math.max(0, Math.min(1, Number(source.advanced_two_pass_anchor_strength ?? DEFAULT_MINIMAX_H3_SETTINGS.advanced_two_pass_anchor_strength))),
     advanced_two_pass_spatial_w_overlap: Math.max(0, Math.min(16384, Math.trunc(Number(source.advanced_two_pass_spatial_w_overlap ?? DEFAULT_MINIMAX_H3_SETTINGS.advanced_two_pass_spatial_w_overlap)))),
@@ -6371,7 +6427,7 @@ function openBuilder(node) {
     { value: "12gb", label: "12 GB — 512px tiles / 85 frames" },
     { value: "16gb", label: "16 GB — 576px tiles / 119 frames" },
     { value: "24gb", label: "24 GB — 672px tiles / 153 frames" },
-    { value: "32gb", label: "32 GB+ — Full frame (no spatial seams)" },
+    { value: "32gb", label: "32 GB+ — Full frame / 170 frames (no spatial seams)" },
     { value: "custom", label: "Custom — keep advanced values" },
   ], DEFAULT_MINIMAX_H3_SETTINGS.advanced_two_pass_vram_preset);
   const miniMaxAdvancedTileSizeMode = makeSelect([
@@ -46735,6 +46791,8 @@ Chrome vault corridor = Sealed industrial passage...</pre>
       const queued = await queueWorkflowPrompt(built.prompt);
       const promptId = queued?.prompt_id;
       if (!promptId) throw new Error("ComfyUI queued MiniMax H3 but did not return a prompt_id.");
+      const preRenderVideoPath = String(segment.video_path || "").trim();
+      const preRenderHistoryIndex = Number(segment.video_history_index);
       let liveStageBackupsRegistered = false;
       let liveStageBackupCopying = false;
       let livePreviewStage = 0;
@@ -46921,6 +46979,14 @@ Chrome vault corridor = Sealed industrial passage...</pre>
       );
       return segment.video_path;
     } catch (error) {
+      if (preRenderVideoPath) {
+        segment.video_path = preRenderVideoPath;
+        if (Number.isFinite(preRenderHistoryIndex) && preRenderHistoryIndex >= 0) {
+          segment.video_history_index = preRenderHistoryIndex;
+        }
+        normalizeSegmentVideoHistory(segment);
+        syncPreview(segment);
+      }
       segment.video_status = "error";
       renderList();
       throw error;
@@ -46945,15 +47011,30 @@ Chrome vault corridor = Sealed industrial passage...</pre>
         await ensureSceneFilmGrainAppliedBeforeStitch(overlaySegments, progress, options);
       }
     }
-    const paths = baseSegments.map((segment) => String(selectedSegmentVideoPath(segment) || "").trim());
+    const resolveStitchVideo = (seg) => {
+      const chosen = String(selectedSegmentVideoPath(seg) || "").trim();
+      const info = segmentIndexInfo(seg);
+      const slotNumber = info.index >= 0 ? info.index + 1 : 0;
+      const isStage1 = /_stage1[_\.]/i.test(chosen) || /-stage1[_\.]/i.test(chosen);
+      if (isStage1 && projectInput.value && slotNumber > 0) {
+        const finalCandidate = `${String(projectInput.value).replace(/[\\/]+$/, "")}\\rendered_scene_videos\\video_${String(slotNumber).padStart(4, "0")}-audio.mp4`;
+        const historyFinal = (seg.video_history || []).find((p) => mediaPathKey(p) === mediaPathKey(finalCandidate));
+        if (historyFinal) return historyFinal;
+        if (seg.video_path && !/_stage1[_\.]/i.test(seg.video_path) && !/-stage1[_\.]/i.test(seg.video_path)) {
+          return seg.video_path;
+        }
+      }
+      return chosen;
+    };
+    const paths = baseSegments.map((segment) => resolveStitchVideo(segment));
     const sceneTimingItems = miniMaxProject ? baseSegments.map((segment) => ({
       start: Math.max(0, Number(segment.start || 0) - timelineOffset),
       end: Math.max(0, Number(segment.end || 0) - timelineOffset),
     })) : [];
     const overlayItems = overlaySegments
-      .filter((segment) => String(selectedSegmentVideoPath(segment) || "").trim())
+      .filter((segment) => String(resolveStitchVideo(segment) || "").trim())
       .map((segment, index) => ({
-        path: String(selectedSegmentVideoPath(segment) || "").trim(),
+        path: String(resolveStitchVideo(segment) || "").trim(),
         start: Math.max(0, Number(segment.start || 0) - timelineOffset),
         end: Math.max(0.05, Number(segment.end || 0) - timelineOffset),
         source_start: Math.max(0, Number(segment.overlay_source_start || 0)),
@@ -58060,9 +58141,11 @@ Chrome vault corridor = Sealed industrial passage...</pre>
     }[miniMaxAdvancedVramPreset.value];
     if (miniMaxAdvancedVramPreset.value === "32gb") {
       miniMaxAdvancedTileSizeMode.value = "rows_cols";
+      miniMaxAdvancedTileWidth.value = String(preset.tile);
+      miniMaxAdvancedTileHeight.value = String(preset.tile);
       miniMaxAdvancedGridRows.value = "1";
       miniMaxAdvancedGridCols.value = "1";
-      miniMaxAdvancedChunkLength.value = "153";
+      miniMaxAdvancedChunkLength.value = String(preset.chunk);
       miniMaxAdvancedTemporalOverlap.value = "17";
       miniMaxAdvancedSpatialWOverlap.value = "0";
       miniMaxAdvancedSpatialHOverlap.value = "0";
@@ -58070,22 +58153,7 @@ Chrome vault corridor = Sealed industrial passage...</pre>
       miniMaxAdvancedFadeHeight.value = "0";
       miniMaxAdvancedMinTileSize.value = "256";
       miniMaxAdvancedAnchorStrength.value = "0.999";
-      miniMaxAdvancedOverlapBlend.value = "smoothstep";
-      persistMiniMaxSettings();
-      return;
-    }
-    if (miniMaxAdvancedVramPreset.value === "24gb") {
-      miniMaxAdvancedTileSizeMode.value = "rows_cols";
-      miniMaxAdvancedGridRows.value = "1";
-      miniMaxAdvancedGridCols.value = "2";
-      miniMaxAdvancedChunkLength.value = "153";
-      miniMaxAdvancedTemporalOverlap.value = "17";
-      miniMaxAdvancedSpatialWOverlap.value = "128";
-      miniMaxAdvancedSpatialHOverlap.value = "0";
-      miniMaxAdvancedFadeWidth.value = "64";
-      miniMaxAdvancedFadeHeight.value = "0";
-      miniMaxAdvancedMinTileSize.value = "256";
-      miniMaxAdvancedAnchorStrength.value = "0.999";
+      miniMaxAdvancedOverlapMode.value = "later";
       miniMaxAdvancedOverlapBlend.value = "smoothstep";
       persistMiniMaxSettings();
       return;
@@ -58102,6 +58170,7 @@ Chrome vault corridor = Sealed industrial passage...</pre>
     miniMaxAdvancedFadeHeight.value = miniMaxAdvancedVramPreset.value === "8gb" ? "32" : "64";
     miniMaxAdvancedMinTileSize.value = "256";
     miniMaxAdvancedAnchorStrength.value = "0.999";
+    miniMaxAdvancedOverlapMode.value = "later";
     miniMaxAdvancedOverlapBlend.value = "smoothstep";
     persistMiniMaxSettings();
   });

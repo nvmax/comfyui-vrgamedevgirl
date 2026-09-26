@@ -22,6 +22,7 @@ function fixture() {
     context[name] = { ...control(), input: control(), dataset: {} };
   }
   Object.assign(context, {
+    wizardGlobalVideoSettings: false,
     DEFAULT_MINIMAX_H3_SETTINGS: { latent_context_frames: 22 },
     miniMaxLoraSlots: [], miniMaxAccelerationControls: [], twoPassControls: [], advancedTwoPassControls: [],
     selected: { id: 'a', minimax_h3_latent_context_frames: 22 },

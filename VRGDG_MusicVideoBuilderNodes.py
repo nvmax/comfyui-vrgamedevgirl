@@ -38,7 +38,7 @@ from .VRGDG_WorkflowRunnerNodes import _resolve_comfy_image_path
 from .VRGDG_LUTVideoTools import register_lut_routes
 from .VRGDG_FaceFix import register_face_fix_routes
 from .VRGDG_GemmaPromptSanitizer import extract_prompt_text_from_gemma_output
-from .VRGDG_StoryboardBuilderNodes import _STORYBOARD_T2I_GEMMA_INSTRUCTIONS
+from .VRGDG_StoryboardLLMs import _STORYBOARD_T2I_GEMMA_INSTRUCTIONS
 from .VRGDG_MiniMaxH3PromptInstructions import (
     MINIMAX_H3_IMAGE_REFERENCE_TO_VIDEO_INSTRUCTIONS,
     MINIMAX_H3_IMAGE_TO_VIDEO_INSTRUCTIONS,

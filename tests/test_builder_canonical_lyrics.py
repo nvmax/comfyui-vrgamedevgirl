@@ -7,7 +7,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 NODE_SOURCE = ROOT / "VRGDG_MusicVideoBuilderNodes.py"
-STORY_SOURCE = ROOT / "VRGDG_StoryboardBuilderNodes.py"
+STORY_SOURCE = ROOT / "VRGDG_StoryboardStoryLayer.py"
 UI_SOURCE = ROOT / "web" / "VRGDG_MusicVideoBuilderUI.js"
 
 

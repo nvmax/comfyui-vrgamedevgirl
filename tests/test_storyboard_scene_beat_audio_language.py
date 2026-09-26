@@ -4,15 +4,16 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SOURCE_PATH = ROOT / "VRGDG_StoryboardBuilderNodes.py"
+SOURCE_PATH = ROOT / "VRGDG_StoryboardStoryLayer.py"
 SOURCE = SOURCE_PATH.read_text(encoding="utf-8")
+LLM_SOURCE = (ROOT / "VRGDG_StoryboardLLMs.py").read_text(encoding="utf-8")
 
 
 class StoryboardSceneBeatAudioLanguageTests(unittest.TestCase):
     def test_scene_beat_prompt_is_visual_only(self):
-        self.assertIn("visual narrative Scene Story Beat only", SOURCE)
-        self.assertIn("never copy those assignments into the story_beat", SOURCE)
-        self.assertIn("Exclude all audio, lyric, vocal, singing, lip-sync", SOURCE)
+        self.assertIn("visual narrative Scene Story Beat only", LLM_SOURCE)
+        self.assertIn("never copy those assignments into the story_beat", LLM_SOURCE)
+        self.assertIn("Exclude all audio, lyric, vocal, singing, lip-sync", LLM_SOURCE)
 
     def test_scene_beat_has_output_guard_and_repair(self):
         self.assertIn("_scene_beat_has_audio_language(text)", SOURCE)

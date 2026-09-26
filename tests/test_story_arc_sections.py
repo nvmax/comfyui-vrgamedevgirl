@@ -4,7 +4,7 @@ import unittest
 from pathlib import Path
 
 
-SOURCE_PATH = Path(__file__).resolve().parents[1] / "VRGDG_StoryboardBuilderNodes.py"
+SOURCE_PATH = Path(__file__).resolve().parents[1] / "VRGDG_StoryboardStoryLayer.py"
 HELPERS = {
     "_parse_story_arc_lyric_sections",
     "_cap_story_arc_words",
@@ -118,7 +118,8 @@ class StoryArcSectionTests(unittest.TestCase):
 
     def test_story_arc_generation_has_automatic_format_retry(self):
         source = SOURCE_PATH.read_text(encoding="utf-8")
-        self.assertIn("CORRECTION: Your previous answer did not follow", source)
+        llm_source = (Path(__file__).resolve().parents[1] / "VRGDG_StoryboardLLMs.py").read_text(encoding="utf-8")
+        self.assertIn("CORRECTION: Your previous answer did not follow", llm_source)
         self.assertIn("after an automatic format retry", source)
 
     def test_inline_headings_are_accepted(self):

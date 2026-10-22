@@ -7,7 +7,11 @@ in ``timeline_state.mjs``). Setting only ``video_path`` leaves the scene on the 
 
 import os
 import time
-from typing import Any, Dict
+from typing import Any, Dict, Optional
+
+# The raw take that produced the scene's live video. Agent API only (the Video Builder has no raw-take picker):
+# {"path", "name", "source": render | select | trim, "selected_at", "video_path", "video_size", "video_mtime_ns"}.
+SELECTED_TAKE_KEY = "selected_video_take"
 
 
 def _key(path: Any) -> str:
@@ -52,4 +56,52 @@ def apply_scene_video(segment: Dict[str, Any], video_path: str, thumbnail_path: 
     segment["video_history_index"] = index
     segment["video_thumbnail_path"] = segment["video_thumbnail_history"][index]
     segment["video_cache_bust"] = int(time.time() * 1000)
+    # A new live video invalidates the recorded take; callers that know the take record it again afterwards.
+    segment.pop(SELECTED_TAKE_KEY, None)
     return segment
+
+
+def _fingerprint(path: str) -> Optional[Dict[str, int]]:
+    try:
+        stat = os.stat(path)
+    except OSError:
+        return None
+    return {"video_size": int(stat.st_size), "video_mtime_ns": int(stat.st_mtime_ns)}
+
+
+def record_selected_take(segment: Dict[str, Any], take_path: str, source: str) -> Dict[str, Any]:
+    """Remember that ``take_path`` produced the scene's current live video (call after :func:`apply_scene_video`)."""
+    live = str(segment.get("video_path") or "").strip()
+    fingerprint = _fingerprint(live) if live else None
+    if not str(take_path or "").strip() or fingerprint is None:
+        segment.pop(SELECTED_TAKE_KEY, None)
+        return segment
+    segment[SELECTED_TAKE_KEY] = {
+        "path": str(take_path), "name": os.path.basename(str(take_path)), "source": source,
+        "selected_at": time.time(), "video_path": live, **fingerprint,
+    }
+    return segment
+
+
+def clear_selected_take(segment: Dict[str, Any]) -> Dict[str, Any]:
+    segment.pop(SELECTED_TAKE_KEY, None)
+    return segment
+
+
+def current_selected_take(segment: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """The recorded take if it still matches the live video, else None.
+
+    The live file name (``video_NNNN-audio.mp4``) is reused by every render and select, in the API and the Builder,
+    so the size and modification time recorded with the take are compared too. Any change means it is stale.
+    """
+    saved = segment.get(SELECTED_TAKE_KEY) if isinstance(segment, dict) else None
+    if not isinstance(saved, dict) or not saved.get("path"):
+        return None
+    live = str(segment.get("video_path") or "").strip()
+    if not live or _key(live) != _key(saved.get("video_path")):
+        return None
+    fingerprint = _fingerprint(live)
+    if fingerprint is None or fingerprint["video_size"] != saved.get("video_size") \
+            or fingerprint["video_mtime_ns"] != saved.get("video_mtime_ns"):
+        return None
+    return dict(saved)

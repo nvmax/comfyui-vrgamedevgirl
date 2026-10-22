@@ -1966,7 +1966,7 @@
       "body_keys": [
         "source_path"
       ],
-      "description": "Choose which take is the scene's active video (`source_path`).",
+      "description": "Choose which take is the scene's active video (`source_path`). The take is recorded as the scene's selected take, so GET .../video/takes marks it `is_selected`.",
       "if_match": false,
       "job": false,
       "method": "POST",
@@ -1979,7 +1979,7 @@
     },
     {
       "body_keys": [],
-      "description": "List the scene's raw (untrimmed) renders, newest first, with length, frame count and whether the file still exists. Takes in a sibling scratch folder with the same project name are marked `other_folder`. Only renders made through the API are always kept: the Video Builder deletes its scratch renders after each render. Use `take` on the trim call.",
+      "description": "List the scene's raw (untrimmed) renders, newest first, with length, frame count and whether the file still exists. Takes in a sibling scratch folder with the same project name are marked `other_folder`. Only renders made through the API are always kept: the Video Builder deletes its scratch renders after each render. Use `take` on the trim call. Each take has `is_selected` (true for the take whose copy is the scene's live video), and the reply has `selected_index` (that take's `index`, or `null` when none or unknown) and `selected_take` (`path`, `name`, `source` = `render`, `select` or `trim`, `selected_at`, `video_path`, or `null`). The selection is saved on the scene as `selected_video_take` and is set by an API render, POST .../video/select and a trim from a `take`. It is dropped when the live video changes any other way (a Video Builder render or select, clearing the video, a post-process).",
       "if_match": false,
       "job": false,
       "method": "GET",

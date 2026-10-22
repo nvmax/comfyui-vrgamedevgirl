@@ -25,7 +25,7 @@ from ..errors import (
 )
 from ..jobs.manager import JobManager, get_job_manager
 from ..jobs.models import Job
-from ..scene_video import apply_scene_video
+from ..scene_video import apply_scene_video, clear_selected_take, current_selected_take, record_selected_take
 from ..mutations import _BUILDER_SAVE_LOCK, _get_active_session_and_folder, _persist_session
 from ..paths import resolve_project_folder, session_audio_path, session_video_mode
 from ...minimax.scene_inputs import canonical_continuity_mode, resolve_scene_inputs
@@ -533,6 +533,8 @@ async def render_scene_video_async(
         if raw_render_path not in raw_history:
             raw_history.append(raw_render_path)
         target_seg["raw_video_history"] = raw_history
+        # The fresh render is now the live video, so it is the selected take.
+        record_selected_take(target_seg, raw_render_path, "render")
         # A replaced render is kept as a backup the timeline can switch back to (the UI records it the same way).
         if collect_res.get("backup_path"):
             backups = target_seg.setdefault("video_backup_paths", [])
@@ -654,9 +656,17 @@ def list_scene_takes(project_id: str, scene_id: str) -> Dict[str, Any]:
                     entry["other_folder"] = other
                     found[key] = entry
     takes = sorted(found.values(), key=lambda t: t.get("modified") or 0.0, reverse=True)
+    selected = current_selected_take(seg)
+    selected_index = None
     for index, take in enumerate(takes):
         take["index"] = index
+        take["is_selected"] = bool(selected) and selected_index is None and _same_file(take["path"], selected["path"])
+        if take["is_selected"]:
+            selected_index = index
+    selected_view = ({key: selected[key] for key in ("path", "name", "source", "selected_at", "video_path")}
+                     if selected else None)
     return {"scene_id": seg.get("id"), "scene_number": scene_number, "scratch_folder": scratch, "takes": takes,
+            "selected_index": selected_index, "selected_take": selected_view,
             "usable": sum(1 for t in takes if t["exists"]),
             "note": "" if any(t["exists"] for t in takes) else
             "No raw take is on disk. Render the scene through the API again; the Video Builder deletes its scratch renders after each render."}
@@ -743,6 +753,8 @@ async def run_video_trim_job(job: Job, manager: JobManager) -> Dict[str, Any]:
         _, session = _get_active_session_and_folder(job.project_id)
         target_seg = session["segments"][idx]
         apply_scene_video(target_seg, res["video_path"], res["thumbnail_path"] if res.get("thumbnail_path") else "")
+        if from_take:
+            record_selected_take(target_seg, source_path, "trim")
         save_res = _persist_session(folder, session)
 
     manager.update_progress(job.id, 100.0, "completed", scene_id=scene_id, message="Video trimmed.")
@@ -889,6 +901,7 @@ def select_scene_video(
         _, session = _get_active_session_and_folder(project_id)
         target_seg = session["segments"][idx]
         apply_scene_video(target_seg, res["video_path"], res["thumbnail_path"] if res.get("thumbnail_path") else "")
+        record_selected_take(target_seg, source_path, "select")
         save_res = _persist_session(folder, session)
 
     return {
@@ -914,6 +927,7 @@ def delete_scene_video(project_id: str, scene_id: str) -> Dict[str, Any]:
         seg["thumbnail_path"] = ""
         seg["video_thumbnail_path"] = ""
         seg["video_status"] = ""
+        clear_selected_take(seg)
         if seg.get("preview_mode") == "video":
             seg["preview_mode"] = "image"
         save_res = _persist_session(folder, session)

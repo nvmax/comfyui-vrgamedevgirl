@@ -698,3 +698,131 @@ def _resolve_project_asset_path(project_folder, old_project_folder, raw_path, sc
         if candidate and os.path.isfile(candidate):
             return os.path.abspath(candidate)
     return str(raw_path or "")
+
+
+_AUDIO_MASK_FOLDER = "audio_masks"
+_AUDIO_MASK_META = "mask.json"
+_AUDIO_MASK_SCENE_ID = re.compile(r"[A-Za-z0-9_.-]{1,80}")
+
+
+def _same_path(left, right):
+    a = str(left or "").strip().strip('"')
+    b = str(right or "").strip().strip('"')
+    if not a or not b:
+        return False
+    return os.path.normcase(os.path.abspath(a)) == os.path.normcase(os.path.abspath(b))
+
+
+def _audio_mask_scene_dir(project_folder, scene_id):
+    name = str(scene_id or "").strip()
+    if not project_folder or not _AUDIO_MASK_SCENE_ID.fullmatch(name) or name in {".", ".."}:
+        return ""
+    return os.path.join(os.path.abspath(project_folder), _AUDIO_MASK_FOLDER, name)
+
+
+def _audio_mask_tracks(session):
+    session = session if isinstance(session, dict) else {}
+    return [
+        [item for item in (session.get(key) if isinstance(session.get(key), list) else []) if isinstance(item, dict)]
+        for key in ("segments", "overlay_segments")
+    ]
+
+
+def _audio_mask_source_ids(old_project_folder, branch_tracks):
+    """For every scene of the branch, the id of the source scene whose ``audio_masks/<id>/`` it should get.
+
+    A scene keeps its own id when the source has stems under it. A scene whose id changed in the branch gets the stems
+    of the source scene in the same place (same track, same position, same start and end), read from the source
+    project's saved session.
+    """
+    saved = {}
+    try:
+        with open(os.path.join(old_project_folder, "vrgdg_builder_session.json"), "r", encoding="utf-8-sig") as handle:
+            saved = json.load(handle)
+    except (OSError, ValueError, TypeError):
+        saved = {}
+    source_tracks = _audio_mask_tracks(saved)
+    mapping = {}
+    for track_index, track in enumerate(branch_tracks):
+        source_track = source_tracks[track_index] if track_index < len(source_tracks) else []
+        for index, segment in enumerate(track):
+            new_id = str(segment.get("id") or "")
+            folder = _audio_mask_scene_dir(old_project_folder, new_id)
+            if folder and os.path.isfile(os.path.join(folder, _AUDIO_MASK_META)):
+                mapping[new_id] = new_id
+                continue
+            if index >= len(source_track):
+                continue
+            old = source_track[index]
+            old_id = str(old.get("id") or "")
+            old_folder = _audio_mask_scene_dir(old_project_folder, old_id)
+            if not new_id or not old_folder or not os.path.isfile(os.path.join(old_folder, _AUDIO_MASK_META)):
+                continue
+            try:
+                same_time = all(abs(float(segment.get(key) or 0.0) - float(old.get(key) or 0.0)) <= 0.02 for key in ("start", "end"))
+            except (TypeError, ValueError):
+                same_time = False
+            if same_time:
+                mapping[new_id] = old_id
+    return mapping
+
+
+def _branch_audio_masks(project_folder, old_project_folder, branch_session, sent_session, old_audio_path, new_audio_path):
+    """Give every scene of a branch its own copy of the source scene's Audio Mask files, pointing into the branch.
+
+    ``sent_session`` is the session as sent (before its media was copied), ``branch_session`` the one being saved. The
+    stems' ``mask.json`` names the audio they were split from and the masked mix; the Builder drops stems whose source does
+    not match the scene's audio (``audio_mask.mjs`` ``splitStale``), so the source is changed to the branch's copy of the
+    same audio. Nothing in the source project is written.
+    """
+    project_folder = os.path.abspath(project_folder)
+    if not old_project_folder or not os.path.isdir(old_project_folder):
+        return branch_session
+    old_project_folder = os.path.abspath(old_project_folder)
+    branch_tracks = _audio_mask_tracks(branch_session)
+    sent_tracks = _audio_mask_tracks(sent_session)
+    mapping = _audio_mask_source_ids(old_project_folder, branch_tracks)
+    branch_ids = {str(item.get("id") or "") for track in branch_tracks for item in track}
+    for track_index, track in enumerate(branch_tracks):
+        sent_track = sent_tracks[track_index] if track_index < len(sent_tracks) else []
+        for index, segment in enumerate(track):
+            new_id = str(segment.get("id") or "")
+            old_id = mapping.get(new_id)
+            if not old_id:
+                continue
+            source_dir = _audio_mask_scene_dir(old_project_folder, old_id)
+            target_dir = _audio_mask_scene_dir(project_folder, new_id)
+            copied_old = _audio_mask_scene_dir(project_folder, old_id)
+            if old_id != new_id and os.path.isdir(copied_old) and old_id not in branch_ids:
+                # The folder copy put the stems under the old id; they belong to the renamed scene.
+                shutil.rmtree(target_dir, ignore_errors=True)
+                os.makedirs(os.path.dirname(target_dir), exist_ok=True)
+                shutil.move(copied_old, target_dir)
+            if not os.path.isfile(os.path.join(target_dir, _AUDIO_MASK_META)):
+                shutil.copytree(source_dir, target_dir, dirs_exist_ok=True, ignore=shutil.ignore_patterns("*.tmp"))
+            meta_path = os.path.join(target_dir, _AUDIO_MASK_META)
+            try:
+                with open(meta_path, "r", encoding="utf-8-sig") as handle:
+                    meta = json.load(handle)
+            except (OSError, ValueError, TypeError):
+                continue
+            if not isinstance(meta, dict):
+                continue
+            mix = meta.get("mix")
+            if isinstance(mix, dict):
+                mix["path"] = os.path.join(target_dir, "masked_mix.wav")
+            separation = meta.get("separation")
+            if isinstance(separation, dict):
+                split_from = separation.get("source_path")
+                sent = sent_track[index] if index < len(sent_track) else {}
+                new_custom = str(segment.get("custom_audio_path") or "").strip()
+                if new_custom and _same_path(split_from, sent.get("custom_audio_path")):
+                    separation["source_path"] = new_custom
+                elif new_audio_path and _same_path(split_from, old_audio_path):
+                    separation["source_path"] = new_audio_path
+                else:
+                    rebased = _project_rebased_path(project_folder, old_project_folder, split_from)
+                    if rebased:
+                        separation["source_path"] = rebased
+            atomic_write_json(meta_path, meta)
+    return branch_session

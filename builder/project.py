@@ -16,7 +16,7 @@ from ..minimax.latent_manager import SceneLatentManager
 from .paths import _context_folder, _copy_file_if_exists, _default_project_folder, _images_folder, _global_llm_keys_path, _global_llm_runner_path, _is_internal_approved_image_path, _model_defaults_path, _newest_file, _prompts_folder, _render_logs_folder, _resolve_existing_file, _safe_project_name, _scene_notes_path, _scene_preview_folder, _session_path, _unique_folder_path, _vrgdg_textfile_path, _wizard_draft_path, _wizard_folder, _wizard_lyrics_path
 from .audio import _convert_audio_to_wav, _segments_to_srt, _srt_path
 from .media import _scene_image_path
-from .project_copy import _apply_branch_keep_to_session, _assign_overlay_scene_numbers, _copy_project_tree, _copy_session_assets_to_project, _normalize_branch_keep, _overlay_scene_number, _project_rebased_path, _prune_unkept_project_folders, _rebase_project_owned_paths, _relocate_external_minimax_stage_media, _resolve_project_asset_path, _snapshot_project_assets
+from .project_copy import _apply_branch_keep_to_session, _assign_overlay_scene_numbers, _copy_project_tree, _copy_session_assets_to_project, _normalize_branch_keep, _overlay_scene_number, _project_rebased_path, _prune_unkept_project_folders, _rebase_project_owned_paths, _relocate_external_minimax_stage_media, _resolve_project_asset_path, _snapshot_project_assets, _branch_audio_masks
 
 
 _BUILDER_SAVE_LOCK = threading.RLock()
@@ -292,11 +292,14 @@ def _save_builder_project_as(payload):
     session["overlay_segments"] = overlay_segments
     audio_raw = str(payload.get("audio_path", "") or "").strip().strip('"')
     audio_path = _resolve_existing_file(audio_raw, "Audio file") if audio_raw else ""
+    sent_audio_path = audio_path
+    sent_session = json.loads(json.dumps(session, default=str))
     audio_path, session = _snapshot_project_assets(target, session, audio_path, source)
     session = _copy_session_assets_to_project(target, session)
     session = _rebase_project_owned_paths(target, source, session)
     if keep.get("videos"):
         session = _relocate_external_minimax_stage_media(session, target)
+    session = _branch_audio_masks(target, source, session, sent_session, sent_audio_path, audio_path)
     segments = session.get("segments") if isinstance(session.get("segments"), list) else []
     session = {
         **session,

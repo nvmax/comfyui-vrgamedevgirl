@@ -452,14 +452,38 @@ def delete_scene_stems(payload: Dict[str, Any]) -> Dict[str, Any]:
     return {"ok": True, "removed": removed}
 
 
+def audio_mask_in_use(segment: Any) -> bool:
+    """Whether a scene renders with its masked mix, read like the Builder's render (``audio_mask_store.mjs`` ``audioMaskInUse``).
+
+    An explicit off (``user_off``) wins. Otherwise ``enabled``, or any masked, muted or re-leveled stem, turns it on, so a
+    scene saved with ``enabled: false`` but edited stems renders with the mask in the Builder and here alike.
+    """
+    mask = segment.get("audio_mask") if isinstance(segment, dict) else None
+    if not isinstance(mask, dict) or mask.get("user_off"):
+        return False
+    if mask.get("enabled"):
+        return True
+    stems = mask.get("stems") if isinstance(mask.get("stems"), dict) else {}
+
+    def _edited(stem: Any) -> bool:
+        if not isinstance(stem, dict):
+            return False
+        try:
+            db = float(stem.get("db") or 0)
+        except (TypeError, ValueError):
+            db = 0.0
+        return bool(stem.get("mask") or stem.get("mute") or (math.isfinite(db) and db))
+
+    return any(_edited(stem) for stem in stems.values())
+
+
 def audio_override_for_scene(segment: Dict[str, Any], project_folder: str, duration: float) -> Optional[Dict[str, Any]]:
     """The masked mix a render should use for this scene, or None when the scene has no enabled, current mask.
 
     ``duration`` is the scene length now. A mix built for a different length is out of date and raises, so a render
     never uses audio that no longer matches the scene.
     """
-    mask = segment.get("audio_mask") if isinstance(segment, dict) else None
-    if not isinstance(mask, dict) or not mask.get("enabled"):
+    if not audio_mask_in_use(segment):
         return None
     folder = scene_folder(project_folder, segment.get("id"))
     meta = _load_meta(folder)

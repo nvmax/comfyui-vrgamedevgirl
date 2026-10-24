@@ -6,6 +6,7 @@ import os
 import urllib.parse
 from typing import Any, Dict, List, Optional
 
+from ..builder.audio_stems import audio_mask_in_use
 from ..builder.paths import _session_path
 from ..builder.project import _load_builder_session, _redact_session_secrets
 from ..minimax.latent_manager import SceneLatentManager
@@ -215,7 +216,8 @@ def get_project_detail(project_id: str, include: Optional[List[str]] = None) -> 
 def _scene_locked_settings(segment: Dict[str, Any]) -> Dict[str, Any]:
     """The scene's Audio Mask and locked MiniMax H3 settings, under the session names the Video Builder saves.
 
-    Read-only copies for the scene GET: ``audio_mask`` (``audio_mask.mjs``), the scene settings lock
+    Read-only copies for the scene GET: ``audio_mask`` (``audio_mask.mjs``) and ``audio_mask_in_use`` (whether a render uses
+    the masked mix, like ``audioMaskInUse``; files and editing at ``/scenes/{sid}/audio-mask``), the scene settings lock
     (``use_scene_minimax_h3_settings`` + the scene's own ``minimax_h3_settings``) and the continuity the last render
     recorded (``minimax_h3_continuity_mode_used`` normalized like ``timeline_state.mjs`` reads it, and
     ``minimax_h3_continuity_source_scene_id``). A field the scene never saved is ``None`` (objects), ``False``,
@@ -225,6 +227,7 @@ def _scene_locked_settings(segment: Dict[str, Any]) -> Dict[str, Any]:
     scene_settings = segment.get("minimax_h3_settings")
     return {
         "audio_mask": copy.deepcopy(mask) if isinstance(mask, dict) else None,
+        "audio_mask_in_use": audio_mask_in_use(segment),
         "use_scene_minimax_h3_settings": bool(segment.get("use_scene_minimax_h3_settings")),
         "minimax_h3_settings": copy.deepcopy(scene_settings) if isinstance(scene_settings, dict) else None,
         "minimax_h3_continuity_mode_used": normalize_continuity_mode(segment.get("minimax_h3_continuity_mode_used")),

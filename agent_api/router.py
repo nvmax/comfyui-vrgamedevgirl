@@ -89,6 +89,7 @@ from .orchestrator import (
 from .orchestrator.story_mode_orchestrator import STORY_MODE_JOB_TYPES
 from .paths import resolve_project_folder
 from .modes import get_modes_catalog
+from .scene_audio_mask import get_scene_audio_mask, patch_scene_audio_mask
 from .mutations import (
     get_scene_minimax_references,
     set_scene_minimax_references,
@@ -978,6 +979,26 @@ def register_agent_api_routes(server_instance=None):
             set_scene_minimax_references, pid, sid, payload.get("keys"), bool(payload.get("automatic")),
             if_match_revision=if_match,
         )
+        revision = res.pop("revision", None)
+        return api_success(res, revision=revision)
+
+    @server_instance.routes.get(f"{_API_V1_PREFIX}/projects/{{pid}}/scenes/{{sid}}/audio-mask")
+    @_api_endpoint
+    async def api_get_scene_audio_mask(request: web.Request):
+        pid = request.match_info["pid"]
+        sid = request.match_info["sid"]
+        res = await asyncio.to_thread(get_scene_audio_mask, pid, sid)
+        revision = res.pop("revision", None)
+        return api_success(res, revision=revision)
+
+    @server_instance.routes.patch(f"{_API_V1_PREFIX}/projects/{{pid}}/scenes/{{sid}}/audio-mask")
+    @_api_endpoint
+    async def api_patch_scene_audio_mask(request: web.Request):
+        pid = request.match_info["pid"]
+        sid = request.match_info["sid"]
+        payload = await request.json() if request.can_read_body else {}
+        if_match = int(request.headers.get("If-Match")) if request.headers.get("If-Match", "").isdigit() else None
+        res = await asyncio.to_thread(patch_scene_audio_mask, pid, sid, payload, if_match_revision=if_match)
         revision = res.pop("revision", None)
         return api_success(res, revision=revision)
 

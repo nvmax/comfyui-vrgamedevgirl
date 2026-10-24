@@ -859,7 +859,7 @@
     },
     {
       "body_keys": [],
-      "description": "One scene: timing, lyrics, story beat, prompts (including `minimax_h3_prompt`), approved image, rendered video with its thumbnail, and scene audio. Each file is `null` when it does not exist. `scene_card` is the complete Storyboard scene card with every field PATCH can edit (Director Notes `timeline_note`, Video Notes `motion_summary`, Planning Notes `notes`, camera, performance, references, triggers and prompts). Read-only, under the Builder's own names: `audio_mask` (the scene's Audio Mask stems, or `null`), `use_scene_minimax_h3_settings` and the scene's own `minimax_h3_settings` (its locked MiniMax H3 settings such as `continuity_mode`, or `null`), and the continuity its last render used, `minimax_h3_continuity_mode_used` and `minimax_h3_continuity_source_scene_id`. `minimax_h3_attention` is the attention the scene renders with, resolved like the render (scene settings when locked, else the project's): `source` (`scene` or `project`), `render_pass`, `sage_attention`, `use_memory_efficient_sage_attention`, `block_sparse_attention` and `block_sparse_attention_by_pass`. The scene list leaves these out.",
+      "description": "One scene: timing, lyrics, story beat, prompts (including `minimax_h3_prompt`), approved image, rendered video with its thumbnail, and scene audio. Each file is `null` when it does not exist. `scene_card` is the complete Storyboard scene card with every field PATCH can edit (Director Notes `timeline_note`, Video Notes `motion_summary`, Planning Notes `notes`, camera, performance, references, triggers and prompts). Read-only, under the Builder's own names: `audio_mask` (the scene's Audio Mask stems, or `null`) and `audio_mask_in_use` (whether a render uses its masked mix; files, mix state and editing at `/scenes/{sid}/audio-mask`), `use_scene_minimax_h3_settings` and the scene's own `minimax_h3_settings` (its locked MiniMax H3 settings such as `continuity_mode`, or `null`), and the continuity its last render used, `minimax_h3_continuity_mode_used` and `minimax_h3_continuity_source_scene_id`. `minimax_h3_attention` is the attention the scene renders with, resolved like the render (scene settings when locked, else the project's): `source` (`scene` or `project`), `render_pass`, `sage_attention`, `use_memory_efficient_sage_attention`, `block_sparse_attention` and `block_sparse_attention_by_pass`. The scene list leaves these out.",
       "if_match": false,
       "job": false,
       "method": "GET",
@@ -877,6 +877,32 @@
       "job": false,
       "method": "PATCH",
       "path": "/projects/{pid}/scenes/{sid}",
+      "path_params": [
+        "pid",
+        "sid"
+      ],
+      "query": []
+    },
+    {
+      "body_keys": [],
+      "description": "A scene's Audio Mask (the Builder's Audio Mask window). `audio_mask` is the saved settings under the Builder's names (`version`, `user_off`, `enabled`, `model_name`, `input_gain_db`, `stems` with `mask`, `regions` `[{start, end, fade_ms}]`, `db`, `mute`). `in_use` is whether a render uses the masked mix, read like the Builder's render: an explicit off (`user_off`) wins, otherwise `enabled` or any masked, muted or re-leveled stem turns it on (the Agent API render reads it the same way). Files under `audio_masks/<scene id>/`: `stems_exist`, `stem_names`, `stem_files` (`path`, `exists`), `original`, `separation` (`model_name`, `input_gain_db`, `source_path`, `start_seconds`, `duration_seconds`) and `masked_mix` (`path`, `exists`, `duration_seconds`, `matches_scene_length`, `current`: built from the stem settings saved now). `render_ready` is false when the mask is in use but its mix is missing or was built for another length, and `problem` says why. Read-only; overlay scenes are found by id (`track: overlay`).",
+      "if_match": false,
+      "job": false,
+      "method": "GET",
+      "path": "/projects/{pid}/scenes/{sid}/audio-mask",
+      "path_params": [
+        "pid",
+        "sid"
+      ],
+      "query": []
+    },
+    {
+      "body_keys": [],
+      "description": "Change a scene's Audio Mask like the Builder's Audio Mask window. Any of: `enabled` (\"Render this scene with the masked mix\"; `false` is the hand-made off, `user_off: true`), `stems` (per stem name `vocals`, `drums`, `bass`, `guitar`, `piano`, `other`: any of `mask`, `mute` booleans, `db` -100 to 24, `regions` list of `{start, end, fade_ms}` in seconds from the scene start, within the scene, `fade_ms` 0 to 1000; only the stems and fields sent change; editing a stem turns the mask on, as in the Builder), `model_name` and `input_gain_db` (-24 to 24, used by the next split in the Builder), `rebuild_mix` (`true` re-mixes `masked_mix.wav` from the saved stems, on the CPU; it never splits audio). Turning the mask on when `masked_mix.wav` was never built returns 400 VALIDATION_ERROR and saves nothing; send `rebuild_mix: true` when the stems exist, or split the scene in the Builder first. Invalid fields return 400 with `details.invalid_fields`. Replies with the same body as GET.",
+      "if_match": true,
+      "job": false,
+      "method": "PATCH",
+      "path": "/projects/{pid}/scenes/{sid}/audio-mask",
       "path_params": [
         "pid",
         "sid"
